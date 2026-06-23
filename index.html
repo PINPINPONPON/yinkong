@@ -308,7 +308,18 @@
   <!-- ===== 我的設定 ===== -->
   <section class="screen noNav" id="s-goal">
     <div class="topbar"><button class="back" onclick="go('s-today')">‹</button><h1>我的設定</h1></div>
-    <div class="label" style="margin:14px 22px 0;">目標體重 (kg)<div class="sublabel">留空＝不設數字目標</div></div>
+
+    <div class="label" style="margin:14px 22px 0;">基礎代謝資料<div class="sublabel" id="bmrHint">填齊性別、身高、出生年即可算基礎代謝</div></div>
+    <div style="display:flex;gap:10px;margin:6px 22px;">
+      <button type="button" id="sexM" onclick="setSex('M')" style="flex:1;height:48px;border:1px solid var(--line);border-radius:14px;background:transparent;color:var(--sage-d);font-size:16px;font-family:var(--serif);cursor:pointer;">男</button>
+      <button type="button" id="sexF" onclick="setSex('F')" style="flex:1;height:48px;border:1px solid var(--line);border-radius:14px;background:transparent;color:var(--sage-d);font-size:16px;font-family:var(--serif);cursor:pointer;">女</button>
+    </div>
+    <div style="display:flex;gap:10px;margin:10px 22px 0;">
+      <input id="setHeight" type="number" inputmode="decimal" step="0.1" placeholder="身高 cm" style="flex:1;height:48px;border:1px solid var(--line);border-radius:14px;padding:0 16px;font-size:16px;font-family:var(--sans);color:var(--ink);background:var(--card);box-sizing:border-box;">
+      <input id="setBirth" type="number" inputmode="numeric" placeholder="出生年 1990" style="flex:1;height:48px;border:1px solid var(--line);border-radius:14px;padding:0 16px;font-size:16px;font-family:var(--sans);color:var(--ink);background:var(--card);box-sizing:border-box;">
+    </div>
+
+    <div class="label" style="margin:18px 22px 0;">目標體重 (kg)<div class="sublabel">留空＝不設數字目標</div></div>
     <input id="setGoalWeight" type="number" inputmode="decimal" step="0.1" placeholder="例如 58" style="width:calc(100% - 44px);margin:6px 22px;height:48px;border:1px solid var(--line);border-radius:14px;padding:0 16px;font-size:16px;font-family:var(--sans);color:var(--ink);background:var(--card);box-sizing:border-box;">
     <div class="label" style="margin:16px 22px 0;">每日熱量目標 (大卡)<div class="sublabel">用來判斷今天吃得剛好還是過量</div></div>
     <input id="setCalGoal" type="number" inputmode="numeric" placeholder="例如 1500" style="width:calc(100% - 44px);margin:6px 22px;height:48px;border:1px solid var(--line);border-radius:14px;padding:0 16px;font-size:16px;font-family:var(--sans);color:var(--ink);background:var(--card);box-sizing:border-box;">
@@ -445,7 +456,7 @@ function compressImage(file, maxDim=1280, quality=0.8){
 // ===== 狀態 =====
 const REAL_TODAY=localDate();
 let members=[], me=null, today=REAL_TODAY;
-let curMealType=null, pendingPhoto=null, pendingAI=null, todayMeals={}, water=0, wVal='', chartObj=null, weekChartObj=null, todayExercise=null;
+let curMealType=null, pendingPhoto=null, pendingAI=null, todayMeals={}, water=0, wVal='', chartObj=null, weekChartObj=null, todayExercise=null, bmrWeight=null;
 
 const ICON_FORK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 12v9M16 3c-1.5 0-2.5 2-2.5 5s1 3.5 2.5 3.5V21"/></svg>';
 const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
@@ -536,13 +547,27 @@ function goalChipText(m){
   return m.goal_text||'設定目標';
 }
 function waterGoalFor(m){ return (m&&m.daily_water_goal)?m.daily_water_goal:1500; }
+// 基礎代謝（Mifflin-St Jeor）；資料不齊回 null
+function memberAge(m){ return (m&&m.birth_year)?(Number(REAL_TODAY.split('-')[0])-Number(m.birth_year)):null; }
+function calcBMR(m, weightKg){
+  if(!m||!m.sex||!m.height_cm||!m.birth_year||!weightKg) return null;
+  const base=10*weightKg + 6.25*Number(m.height_cm) - 5*memberAge(m);
+  return Math.round(m.sex==='M'?base+5:base-161);
+}
 
+let setSexVal=null;
+function setSex(v){ setSexVal=v; ['M','F'].forEach(k=>{ const b=document.getElementById('sex'+k); const on=k===v; b.style.background=on?'var(--sage)':'transparent'; b.style.color=on?'#FBFAF4':'var(--sage-d)'; b.style.borderColor=on?'var(--sage)':'var(--line)'; }); }
 function openGoal(){
   if(!me) return;
   document.getElementById('goalInput').value=me.goal_text||'';
   document.getElementById('setGoalWeight').value=me.goal_weight!=null?Number(me.goal_weight):'';
   document.getElementById('setCalGoal').value=me.daily_calorie_goal!=null?me.daily_calorie_goal:'';
   document.getElementById('setWaterGoal').value=me.daily_water_goal!=null?me.daily_water_goal:'';
+  document.getElementById('setHeight').value=me.height_cm!=null?Number(me.height_cm):'';
+  document.getElementById('setBirth').value=me.birth_year!=null?me.birth_year:'';
+  setSexVal=me.sex||null; setSex(setSexVal);
+  const b=calcBMR(me, bmrWeight);
+  document.getElementById('bmrHint').textContent = b? ('你的基礎代謝 ≈ '+b+' 大卡／天') : '填齊性別、身高、出生年即可算基礎代謝';
   go('s-goal');
 }
 async function saveGoal(btn){
@@ -550,11 +575,16 @@ async function saveGoal(btn){
   const gw=parseFloat(document.getElementById('setGoalWeight').value);
   const cg=parseInt(document.getElementById('setCalGoal').value,10);
   const wg=parseInt(document.getElementById('setWaterGoal').value,10);
+  const hc=parseFloat(document.getElementById('setHeight').value);
+  const by=parseInt(document.getElementById('setBirth').value,10);
   const patch={
     goal_text:document.getElementById('goalInput').value.trim(),
     goal_weight:isFinite(gw)?gw:null,
     daily_calorie_goal:isFinite(cg)?cg:null,
-    daily_water_goal:isFinite(wg)?wg:null
+    daily_water_goal:isFinite(wg)?wg:null,
+    sex:setSexVal||null,
+    height_cm:isFinite(hc)?hc:null,
+    birth_year:(isFinite(by)&&by>1900&&by<2020)?by:null
   };
   if(btn) btn.disabled=true;
   const {error}=await sb.from('members').update(patch).eq('id',me.id);
@@ -582,6 +612,9 @@ async function loadToday(){
     if(prev.data){ const diff=wt-Number(prev.data.weight_kg); const down=diff<=0; dEl.textContent='較前次 '+(down?'▼ ':'▲ ')+Math.abs(diff).toFixed(1); dEl.className='pill '+(down?'down':'up'); }
     else { dEl.textContent='第一筆紀錄'; dEl.className='pill down'; }
   } else { dEl.textContent='尚未記錄'; dEl.className='pill up'; }
+  // BMR 用體重：今天有記用今天，否則用最近一筆
+  if(wt!=null){ bmrWeight=wt; }
+  else { const lw=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).order('log_date',{ascending:false}).limit(1).maybeSingle(); bmrWeight=lw.data?Number(lw.data.weight_kg):null; }
   water=wat.data?wat.data.amount_ml:0; renderWater();
   todayMeals={}; (ml.data||[]).forEach(r=>todayMeals[r.meal_type]=r); renderMeals();
 }
@@ -841,29 +874,44 @@ async function loadFamily(){
 function loadAI(){
   const meals=MEAL_TYPES.map(t=>todayMeals[t]).filter(Boolean);
   const intake=meals.reduce((s,m)=>s+(Number(m.ai_calories)||0),0);
-  const burned=todayExercise?(Number(todayExercise.ai_calories_burned)||0):0;
-  const net=intake-burned;
+  const exB=todayExercise?(Number(todayExercise.ai_calories_burned)||0):0;
   const done=meals.length, pct=Math.round(water/waterGoalFor(me)*100);
   const calGoal=(me&&me.daily_calorie_goal)?Number(me.daily_calorie_goal):null;
+  const bmr=calcBMR(me, bmrWeight);
+  const baseBurn=bmr?Math.round(bmr*1.2):0;
+  const totalBurn=bmr?(baseBurn+exB):exB;
+  const net=intake-totalBurn;
   let rows='';
   MEAL_TYPES.forEach(t=>{ const m=todayMeals[t]; rows+=`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:15px"><span>${t}</span><span style="color:var(--muted)">${m?(m.ai_calories?m.ai_calories+' 大卡':'已記錄'):'—'}</span></div>`; });
+  const burnLabel=bmr?'總消耗':'運動消耗';
+  const burnSub=bmr?`基礎 ${baseBurn}＋運動 ${exB}`:'';
+  const netLabel=bmr?'能量平衡':'淨攝取';
   let judge='';
-  if(calGoal){ const remain=calGoal-net; judge=`<div style="font-size:14px;margin:2px 0 12px;color:${remain>=0?'var(--sage-d)':'var(--clay-d)'}">目標 ${calGoal} 大卡・${remain>=0?('還可吃 <b>'+remain+'</b> 大卡'):('超過 <b>'+(-remain)+'</b> 大卡')}</div>`; }
+  if(bmr){
+    const col=net<0?'var(--sage-d)':(net>0?'var(--clay-d)':'var(--muted)');
+    const msg=net<=-50?('赤字 <b>'+(-net)+'</b> 大卡・往變瘦的方向 👍'):(net>=50?('盈餘 <b>'+net+'</b> 大卡・往變胖的方向'):'大致平衡・維持中');
+    judge=`<div style="font-size:14px;margin:2px 0 12px;color:${col}">${msg}</div>`;
+  } else if(calGoal){
+    const remain=calGoal-net;
+    judge=`<div style="font-size:14px;margin:2px 0 12px;color:${remain>=0?'var(--sage-d)':'var(--clay-d)'}">目標 ${calGoal} 大卡・${remain>=0?('還可吃 <b>'+remain+'</b> 大卡'):('超過 <b>'+(-remain)+'</b> 大卡')}</div>`;
+  } else {
+    judge=`<div style="font-size:13px;margin:2px 0 12px;color:var(--clay-d)">想看「基礎代謝＋能量平衡」？到 <button onclick="openGoal()" style="background:none;border:none;color:var(--sage-d);text-decoration:underline;padding:0;cursor:pointer;font-size:13px">我的設定</button> 填身高、性別、出生年</div>`;
+  }
   document.getElementById('aiBody').innerHTML=
-    `<div class="bubble"><span class="h">今日熱量</span>`+
-    `<div style="display:flex;gap:16px;align-items:baseline;margin:2px 0 6px;flex-wrap:wrap">`+
-      `<div><div style="font-family:var(--serif);font-size:28px"><span id="aiIntake">0</span></div><div style="font-size:12px;color:var(--muted)">攝取</div></div>`+
-      `<div style="color:var(--muted);font-size:20px">−</div>`+
-      `<div><div style="font-family:var(--serif);font-size:28px;color:var(--sage-d)"><span id="aiBurned">0</span></div><div style="font-size:12px;color:var(--muted)">消耗</div></div>`+
-      `<div style="color:var(--muted);font-size:20px">=</div>`+
-      `<div><div style="font-family:var(--serif);font-size:28px"><span id="aiNet">0</span></div><div style="font-size:12px;color:var(--muted)">淨攝取</div></div>`+
+    `<div class="bubble"><span class="h">今日能量</span>`+
+    `<div style="display:flex;gap:14px;align-items:flex-start;margin:2px 0 6px;flex-wrap:wrap">`+
+      `<div><div style="font-family:var(--serif);font-size:26px"><span id="aiIntake">0</span></div><div style="font-size:12px;color:var(--muted)">攝取</div></div>`+
+      `<div style="color:var(--muted);font-size:18px;padding-top:5px">−</div>`+
+      `<div><div style="font-family:var(--serif);font-size:26px;color:var(--sage-d)"><span id="aiBurned">0</span></div><div style="font-size:12px;color:var(--muted)">${burnLabel}</div>${burnSub?`<div style="font-size:11px;color:var(--faint)">${burnSub}</div>`:''}</div>`+
+      `<div style="color:var(--muted);font-size:18px;padding-top:5px">=</div>`+
+      `<div><div style="font-family:var(--serif);font-size:26px"><span id="aiNet">0</span></div><div style="font-size:12px;color:var(--muted)">${netLabel}</div></div>`+
     `</div>`+
     judge+
     rows+
     `<div style="margin-top:12px;font-size:13px;color:var(--muted)">已記 ${done}/3 餐・喝水 ${pct}%</div></div>`+
     `<div id="aiNote" class="bubble"><span class="h">營養師總評</span><span style="opacity:.6">讀取中 </span>${THINK}</div>`;
   animateNum(document.getElementById('aiIntake'), intake);
-  animateNum(document.getElementById('aiBurned'), burned);
+  animateNum(document.getElementById('aiBurned'), totalBurn);
   animateNum(document.getElementById('aiNet'), net);
   loadDailyNote(false);
 }
@@ -886,8 +934,13 @@ async function loadDailyNote(force){
     const w=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).eq('log_date',today).maybeSingle();
     let weightKg=w.data?Number(w.data.weight_kg):null, deltaKg=null;
     if(weightKg!=null){ const p=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).lt('log_date',today).order('log_date',{ascending:false}).limit(1).maybeSingle(); if(p.data) deltaKg=Math.round((weightKg-Number(p.data.weight_kg))*10)/10; }
+    const intakeSum=meals.reduce((s,m)=>s+(Number(m.ai_calories)||0),0);
+    const exB=todayExercise?(Number(todayExercise.ai_calories_burned)||0):0;
+    const bmr=calcBMR(me, weightKg!=null?weightKg:bmrWeight);
+    const totalBurn=bmr?(Math.round(bmr*1.2)+exB):null;
+    const balance=(totalBurn!=null)?(intakeSum-totalBurn):null;
     const r=await callAI({action:'daily', meals:meals.map(m=>({type:m.meal_type,calories:m.ai_calories,analysis:m.ai_analysis})), weightKg, deltaKg, waterMl:water, goalText:me.goal_text,
-      exerciseDescription: todayExercise?todayExercise.description:'', exerciseBurned: todayExercise?todayExercise.ai_calories_burned:0});
+      exerciseDescription: todayExercise?todayExercise.description:'', exerciseBurned: exB, bmr, totalBurn, balance});
     await sb.from('ai_notes').upsert({member_id:me.id,log_date:today,content:r.note},{onConflict:'member_id,log_date'});
     el.innerHTML=noteHTML(r.note);
   }catch(err){ el.innerHTML='<span class="h">營養師總評</span><span style="color:var(--clay-d)">AI 暫時無法回應（'+(err.message||err)+'），稍後再試。</span>'; }

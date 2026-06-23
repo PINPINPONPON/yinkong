@@ -113,6 +113,12 @@ async function handleDaily(b: any) {
   const exLine = exDesc
     ? `今日運動：${exDesc}（約消耗 ${exBurned} 大卡）\n`
     : "今日運動：未記錄\n";
+  let energyLine = "";
+  if (b.bmr != null && b.totalBurn != null && b.balance != null) {
+    const bal = Number(b.balance);
+    const state = bal <= -50 ? `熱量赤字 ${-bal} 大卡（往變瘦方向）` : (bal >= 50 ? `熱量盈餘 ${bal} 大卡（往變胖方向）` : "熱量大致平衡");
+    energyLine = `基礎代謝約 ${b.bmr} 大卡，今日總消耗約 ${b.totalBurn} 大卡（基礎×1.2＋運動）。能量平衡：攝取 ${total} − 消耗 ${b.totalBurn} = ${bal > 0 ? "+" : ""}${bal} 大卡，即${state}。\n`;
+  }
   const prompt =
     "你是親切、專業的家庭營養師。根據以下某位家人今天的紀錄，用繁體中文寫建議。\n" +
     `目標：${b.goalText || "維持健康"}\n` +
@@ -120,9 +126,11 @@ async function handleDaily(b: any) {
     `${b.deltaKg != null ? `（較前次 ${b.deltaKg > 0 ? "+" : ""}${b.deltaKg} kg）` : ""}\n` +
     `今日飲水：${b.waterMl ?? 0} cc\n` +
     exLine +
+    energyLine +
     `今日三餐（合計約 ${total} 大卡）：\n${lines}\n\n` +
-    "請輸出三段，每段開頭用【今日總評】【小提醒】【運動建議】標示，" +
-    "可對照「攝取與消耗」給建議。語氣溫暖、具體、不說教，每段 2～3 句即可。不要使用 markdown 符號。";
+    "請輸出三段，每段開頭用【今日總評】【小提醒】【運動建議】標示。" +
+    (energyLine ? "請以「能量平衡（赤字/盈餘）」為核心給建議，說明今天的吃與動對體重目標的影響。" : "可對照攝取與消耗給建議。") +
+    "語氣溫暖、具體、不說教，每段 2～3 句即可。不要使用 markdown 符號。";
   const text = await callGemini([{ text: prompt }], { json: false });
   return json({ note: text.trim(), totalCalories: total });
 }

@@ -8,10 +8,13 @@ create table if not exists members (
   avatar_color       text not null default '#6E7C63',
   goal_text          text default '',
   sort_order         int  default 0,
-  pin                text,                 -- 選填 4 位數 PIN（之後加）
+  pin                text,                 -- 選填 4 位數 PIN
   goal_weight        numeric(5,1),         -- 目標體重
   daily_calorie_goal int,                  -- 每日熱量目標
-  daily_water_goal   int default 1500      -- 每日喝水目標
+  daily_water_goal   int default 1500,     -- 每日喝水目標
+  sex                text,                 -- 'M'/'F'（算基礎代謝用）
+  birth_year         int,                  -- 出生年（算年齡）
+  height_cm          numeric(4,1)          -- 身高
 );
 
 -- 體重紀錄（每人每天一筆，重複記錄會覆蓋）
