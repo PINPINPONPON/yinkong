@@ -458,8 +458,9 @@ async function saveMeal(btn){
   try{
     let photo_url=todayMeals[curMealType]?todayMeals[curMealType].photo_url:null;
     if(pendingPhoto){
-      const ext=(pendingPhoto.name.split('.').pop()||'jpg').toLowerCase();
-      const path=`${me.id}/${today}/${curMealType}-${Date.now()}.${ext}`;
+      const ext=(pendingPhoto.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+      const slug={'早餐':'breakfast','午餐':'lunch','晚餐':'dinner'}[curMealType]||'meal';
+      const path=`${me.id}/${today}/${slug}-${Date.now()}.${ext}`;
       const up=await sb.storage.from(PHOTO_BUCKET).upload(path,pendingPhoto,{upsert:true,contentType:pendingPhoto.type});
       if(up.error) throw up.error;
       photo_url=sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
