@@ -33,7 +33,8 @@ create table if not exists meals (
   member_id   bigint references members(id) on delete cascade,
   log_date    date not null,
   meal_type   text not null,          -- 早餐 / 午餐 / 晚餐
-  photo_url   text,                   -- 照片網址（存在 Storage）
+  photo_url   text,                   -- 第一張照片（列表縮圖／相容）
+  photo_urls  text[],                 -- 一餐多張照片
   note        text default '',        -- 手動補充文字
   ai_calories int,                    -- AI 估計熱量
   ai_analysis text,                   -- AI 辨識/分析結果
