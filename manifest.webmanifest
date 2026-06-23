@@ -1,0 +1,16 @@
+{
+  "name": "飲控大作戰",
+  "short_name": "飲控",
+  "description": "全家一起的飲控紀錄：體重、三餐、喝水、運動，AI 營養師建議",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F6F2E9",
+  "theme_color": "#6E7C63",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
