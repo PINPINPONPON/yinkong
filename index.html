@@ -356,6 +356,18 @@
     <div class="card">
       <p class="quote"><span class="h">趨勢解讀</span><span id="tQuote">記錄越多天，這裡的解讀會越準。先連續記幾天看看吧。</span></p>
     </div>
+
+    <div class="label" style="margin-top:6px;">本週報表<div class="sublabel">最近 7 天</div></div>
+    <div class="stat3">
+      <div class="stat"><div class="v" id="wkIntake">—</div><div class="l">日均攝取</div></div>
+      <div class="stat"><div class="v g" id="wkBurned">—</div><div class="l">本週消耗</div></div>
+      <div class="stat"><div class="v" id="wkDays">—</div><div class="l">記錄天數</div></div>
+    </div>
+    <div class="chartWrap" style="height:220px"><canvas id="weekChart"></canvas></div>
+    <div class="card">
+      <div class="kicker" style="margin-bottom:12px;">喝水達標（近 7 天）</div>
+      <div id="waterWeek" style="display:flex;justify-content:space-between;gap:6px;"></div>
+    </div>
   </section>
 
   <!-- ===== 家庭 ===== -->
@@ -413,11 +425,27 @@ async function callAI(body){
   return data;
 }
 function fileToBase64(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(String(r.result).split(',')[1]); r.onerror=reject; r.readAsDataURL(file); }); }
+// 上傳前壓縮：最長邊縮到 1280、轉 JPEG 0.8（多 MB → 約 100–300KB）
+function compressImage(file, maxDim=1280, quality=0.8){
+  return new Promise((resolve)=>{
+    const url=URL.createObjectURL(file); const img=new Image();
+    img.onload=()=>{
+      let w=img.naturalWidth, h=img.naturalHeight;
+      if(Math.max(w,h)>maxDim){ const s=maxDim/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      c.toBlob(b=>resolve(b&&b.size<file.size?b:file), 'image/jpeg', quality);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); resolve(file); };
+    img.src=url;
+  });
+}
 
 // ===== 狀態 =====
 const REAL_TODAY=localDate();
 let members=[], me=null, today=REAL_TODAY;
-let curMealType=null, pendingPhoto=null, pendingAI=null, todayMeals={}, water=0, wVal='', chartObj=null, todayExercise=null;
+let curMealType=null, pendingPhoto=null, pendingAI=null, todayMeals={}, water=0, wVal='', chartObj=null, weekChartObj=null, todayExercise=null;
 
 const ICON_FORK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 12v9M16 3c-1.5 0-2.5 2-2.5 5s1 3.5 2.5 3.5V21"/></svg>';
 const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
@@ -644,14 +672,15 @@ function aiGuessHTML(cal,analysis){
 }
 async function onPhotoPick(e){
   const f=e.target.files[0]; if(!f) return;
-  pendingPhoto=f; pendingAI=null;
-  document.getElementById('photoBox').innerHTML=`<img src="${URL.createObjectURL(f)}">`;
+  pendingAI=null;
   const g=document.getElementById('aiGuess');
   g.innerHTML='<span style="opacity:.6">AI 分析中 </span>'+THINK; g.classList.remove('hidden');
+  pendingPhoto=await compressImage(f);
+  document.getElementById('photoBox').innerHTML=`<img src="${URL.createObjectURL(pendingPhoto)}">`;
   try{
-    const base64=await fileToBase64(f);
+    const base64=await fileToBase64(pendingPhoto);
     const note=document.getElementById('mealNote').value.trim();
-    const r=await callAI({action:'meal', imageBase64:base64, mimeType:f.type, note});
+    const r=await callAI({action:'meal', imageBase64:base64, mimeType:pendingPhoto.type||'image/jpeg', note});
     pendingAI={calories:r.calories, analysis:r.analysis};
     const calInput=document.getElementById('mealCal'); if(calInput && !calInput.value) calInput.value=r.calories;
     g.innerHTML=aiGuessHTML(r.calories, r.analysis)+(r.items&&r.items.length?`<br><span style="opacity:.7">辨識：${r.items.join('、')}</span>`:'');
@@ -667,10 +696,9 @@ async function saveMeal(btn){
   try{
     let photo_url=todayMeals[curMealType]?todayMeals[curMealType].photo_url:null;
     if(pendingPhoto){
-      const ext=(pendingPhoto.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
       const slug={'早餐':'breakfast','午餐':'lunch','晚餐':'dinner'}[curMealType]||'meal';
-      const path=`${me.id}/${today}/${slug}-${Date.now()}.${ext}`;
-      const up=await sb.storage.from(PHOTO_BUCKET).upload(path,pendingPhoto,{upsert:true,contentType:pendingPhoto.type});
+      const path=`${me.id}/${today}/${slug}-${Date.now()}.jpg`;
+      const up=await sb.storage.from(PHOTO_BUCKET).upload(path,pendingPhoto,{upsert:true,contentType:'image/jpeg'});
       if(up.error) throw up.error;
       photo_url=sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
     }
@@ -718,6 +746,7 @@ async function loadTrend(){
     document.getElementById('tQuote').textContent = rows.length<3 ? '記錄越多天，這裡的解讀會越準。先連續記幾天看看吧。' : trendQuote(rows);
   } else { document.getElementById('tNow').textContent='—'; document.getElementById('tMonth').textContent='—'; }
   drawChart(rows);
+  await loadWeekReport();
 }
 function trendQuote(rows){
   const diff=Number(rows[rows.length-1].weight_kg)-Number(rows[0].weight_kg);
@@ -725,15 +754,64 @@ function trendQuote(rows){
   if(diff>0.2) return '最近略有回升，回頭看看三餐與喝水，調整一下就好。';
   return '體重大致持平，穩定也是一種好狀態。';
 }
+function wdOf(dstr){ const p=dstr.split('-'); return ['日','一','二','三','四','五','六'][new Date(p[0],p[1]-1,p[2]).getDay()]; }
+// 體重圖：用「連續日期」當 x 軸，缺記的日子留空（spanGaps）→ 間距不再失真
 function drawChart(rows){
   const ctx=document.getElementById('trendChart'); if(!ctx) return;
-  if(chartObj) chartObj.destroy();
-  const labels=rows.map(r=>{const p=r.log_date.split('-');return p[1]+'/'+p[2];});
+  if(chartObj){ chartObj.destroy(); chartObj=null; }
+  if(!rows.length) return;
+  const byDate={}; rows.forEach(r=>byDate[r.log_date]=Number(r.weight_kg));
+  let start=rows[0].log_date; const min30=addDays(REAL_TODAY,-29); if(start<min30) start=min30;
+  const labels=[], data=[]; let d=start, guard=0;
+  while(d<=REAL_TODAY && guard<400){ const p=d.split('-'); labels.push(p[1]+'/'+p[2]); data.push(byDate[d]!=null?byDate[d]:null); d=addDays(d,1); guard++; }
   chartObj=new Chart(ctx,{ type:'line',
-    data:{ labels, datasets:[{ data:rows.map(r=>Number(r.weight_kg)),
+    data:{ labels, datasets:[{ data, spanGaps:true,
       borderColor:'#6E7C63', backgroundColor:'rgba(110,124,99,.10)', fill:true, tension:.4,
-      pointBackgroundColor:'#6E7C63', pointBorderColor:'#FFFDF8', pointBorderWidth:2, pointRadius:4 }] },
+      pointBackgroundColor:'#6E7C63', pointBorderColor:'#FFFDF8', pointBorderWidth:2, pointRadius:(c)=>c.raw==null?0:4 }] },
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ y:{ ticks:{color:'#A39A89',font:{size:11}}, grid:{color:'#EEE8DA'} },
+               x:{ grid:{display:false}, ticks:{color:'#A39A89',font:{size:11}, maxTicksLimit:6, autoSkip:true} } } }
+  });
+}
+// 週報表：近 7 天攝取 vs 消耗、喝水達標
+async function loadWeekReport(){
+  if(!me) return;
+  const days=[]; for(let i=6;i>=0;i--) days.push(addDays(REAL_TODAY,-i));
+  const wkStart=days[0];
+  const [mw,xw,ww]=await Promise.all([
+    sb.from('meals').select('log_date,ai_calories').eq('member_id',me.id).gte('log_date',wkStart),
+    sb.from('exercise_logs').select('log_date,ai_calories_burned').eq('member_id',me.id).gte('log_date',wkStart),
+    sb.from('water_logs').select('log_date,amount_ml').eq('member_id',me.id).gte('log_date',wkStart)
+  ]);
+  const inBy={}, bnBy={}, wtBy={};
+  (mw.data||[]).forEach(m=>{ inBy[m.log_date]=(inBy[m.log_date]||0)+(Number(m.ai_calories)||0); });
+  (xw.error?[]:(xw.data||[])).forEach(x=>{ bnBy[x.log_date]=(bnBy[x.log_date]||0)+(Number(x.ai_calories_burned)||0); });
+  (ww.data||[]).forEach(w=>{ wtBy[w.log_date]=w.amount_ml; });
+  const intake=days.map(d=>inBy[d]||0), burn=days.map(d=>bnBy[d]||0);
+  const loggedDays=days.filter(d=>(inBy[d]||0)>0).length;
+  const avgIntake=loggedDays?Math.round(intake.reduce((a,b)=>a+b,0)/loggedDays):0;
+  document.getElementById('wkIntake').textContent=avgIntake||'—';
+  document.getElementById('wkBurned').textContent=burn.reduce((a,b)=>a+b,0)||'—';
+  document.getElementById('wkDays').textContent=loggedDays+'/7';
+  drawWeekChart(days, intake, burn);
+  // 喝水達標小條
+  const goal=waterGoalFor(me);
+  document.getElementById('waterWeek').innerHTML=days.map(d=>{
+    const v=wtBy[d]||0, pct=Math.min(100,Math.round(v/goal*100));
+    const col=pct>=100?'var(--sage)':(pct>0?'var(--blue)':'var(--line)');
+    return `<div style="flex:1;text-align:center"><div style="height:46px;display:flex;align-items:flex-end;justify-content:center"><div style="width:13px;border-radius:6px;background:${col};height:${Math.max(5,Math.round(pct*0.46))}px"></div></div><div style="font-size:11px;color:var(--muted);margin-top:5px">${wdOf(d)}</div></div>`;
+  }).join('');
+}
+function drawWeekChart(days, intake, burn){
+  const ctx=document.getElementById('weekChart'); if(!ctx) return;
+  if(weekChartObj){ weekChartObj.destroy(); weekChartObj=null; }
+  weekChartObj=new Chart(ctx,{ type:'bar',
+    data:{ labels:days.map(wdOf), datasets:[
+      {label:'攝取', data:intake, backgroundColor:'#9FB089', borderRadius:5, maxBarThickness:18},
+      {label:'消耗', data:burn, backgroundColor:'#D8A98C', borderRadius:5, maxBarThickness:18}
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:true, position:'bottom', labels:{color:'#6b6862', font:{size:11}, boxWidth:12, padding:14}}},
       scales:{ y:{ ticks:{color:'#A39A89',font:{size:11}}, grid:{color:'#EEE8DA'} },
                x:{ grid:{display:false}, ticks:{color:'#A39A89',font:{size:11}} } } }
   });
@@ -826,6 +904,9 @@ document.addEventListener('pointerdown', (e)=>{ const el=e.target.closest(PRESS_
 document.addEventListener('pointerup', clearPressing, {passive:true});
 document.addEventListener('pointercancel', clearPressing, {passive:true});
 window.addEventListener('blur', clearPressing);
+
+// 離線可用：註冊 Service Worker
+if('serviceWorker' in navigator){ window.addEventListener('load', ()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
 
 boot();
 </script>
