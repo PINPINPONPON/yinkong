@@ -1,0 +1,4 @@
+project_id = "yinkong"
+
+[functions.nutritionist]
+verify_jwt = true

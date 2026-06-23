@@ -6,3 +6,8 @@
 .env
 .env.local
 *.key
+
+# Supabase CLI 本機暫存
+supabase/.temp/
+supabase/.branches/
+

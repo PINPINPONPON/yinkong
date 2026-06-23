@@ -245,7 +245,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.5"/></svg>
       <div class="tx">輕觸拍照，或選一張照片</div>
     </div>
-    <input type="file" id="mealFile" accept="image/*" capture="environment" style="display:none" onchange="onPhotoPick(event)">
+    <input type="file" id="mealFile" accept="image/*" style="display:none" onchange="onPhotoPick(event)">
     <div class="aiTag hidden" id="aiGuess"></div>
     <div class="label" style="margin:20px 22px 0;">補充說明<div class="sublabel">想記的話再寫，不寫也行</div></div>
     <textarea id="mealNote" placeholder="例如：地瓜半條、無糖豆漿一杯…"></textarea>
@@ -308,11 +308,23 @@ const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const PHOTO_BUCKET='meal-photos';
 const WATER_GOAL=1500;
 const MEAL_TYPES=['早餐','午餐','晚餐'];
+const FUNCTIONS_URL=SUPABASE_URL+'/functions/v1/nutritionist';
 const sb=supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// 呼叫後台 AI 函式（Gemini 金鑰藏在後台，這裡只帶公開的 anon key）
+async function callAI(body){
+  const res=await fetch(FUNCTIONS_URL,{ method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+SUPABASE_ANON, 'apikey':SUPABASE_ANON },
+    body:JSON.stringify(body) });
+  const data=await res.json().catch(()=>({error:'回應格式錯誤'}));
+  if(!res.ok || data.error) throw new Error(data.error||('HTTP '+res.status));
+  return data;
+}
+function fileToBase64(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(String(r.result).split(',')[1]); r.onerror=reject; r.readAsDataURL(file); }); }
 
 // ===== 狀態 =====
 let members=[], me=null, today=localDate();
-let curMealType=null, pendingPhoto=null, todayMeals={}, water=0, wVal='', chartObj=null;
+let curMealType=null, pendingPhoto=null, pendingAI=null, todayMeals={}, water=0, wVal='', chartObj=null;
 
 const ICON_FORK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 12v9M16 3c-1.5 0-2.5 2-2.5 5s1 3.5 2.5 3.5V21"/></svg>';
 const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
@@ -398,7 +410,8 @@ function renderMeals(){
   const box=document.getElementById('mealList'); box.innerHTML='';
   MEAL_TYPES.forEach(type=>{
     const row=todayMeals[type], done=!!row;
-    const desc=done?(row.ai_analysis||row.note||'已記錄'):'還沒記錄';
+    let desc='還沒記錄';
+    if(done){ const cal=row.ai_calories?('約 '+row.ai_calories+' 大卡・'):''; desc=cal+(row.ai_analysis||row.note||'已記錄'); }
     const thumb=(row&&row.photo_url)?`<img src="${row.photo_url}">`:(done?ICON_CHECK:ICON_FORK);
     const d=document.createElement('div'); d.className='meal'+(done?' done':'');
     d.innerHTML=`<div class="ph">${thumb}</div><div class="body"><div class="t">${type}</div><div class="s">${desc}</div></div><div class="chev">${done?'修改':'記錄 ›'}</div>`;
@@ -406,20 +419,36 @@ function renderMeals(){
   });
 }
 function openMeal(type){
-  curMealType=type; pendingPhoto=null;
+  curMealType=type; pendingPhoto=null; pendingAI=null;
   const row=todayMeals[type];
   document.getElementById('mealTitle').textContent=type;
   document.getElementById('mealNote').value=row&&row.note?row.note:'';
   document.getElementById('mealFile').value='';
   const pb=document.getElementById('photoBox');
   pb.innerHTML=(row&&row.photo_url)?`<img src="${row.photo_url}">`:`${ICON_CAM}<div class="tx">輕觸拍照，或選一張照片</div>`;
-  document.getElementById('aiGuess').classList.add('hidden');
+  const g=document.getElementById('aiGuess');
+  if(row&&(row.ai_calories||row.ai_analysis)){ g.innerHTML=aiGuessHTML(row.ai_calories,row.ai_analysis); g.classList.remove('hidden'); }
+  else g.classList.add('hidden');
   go('s-meal');
 }
-function onPhotoPick(e){
+function aiGuessHTML(cal,analysis){
+  return (cal?`AI 估計約 <b>${cal} 大卡</b>。`:'')+(analysis||'');
+}
+async function onPhotoPick(e){
   const f=e.target.files[0]; if(!f) return;
-  pendingPhoto=f;
+  pendingPhoto=f; pendingAI=null;
   document.getElementById('photoBox').innerHTML=`<img src="${URL.createObjectURL(f)}">`;
+  const g=document.getElementById('aiGuess');
+  g.innerHTML='<span style="opacity:.7">AI 分析中…請稍候</span>'; g.classList.remove('hidden');
+  try{
+    const base64=await fileToBase64(f);
+    const note=document.getElementById('mealNote').value.trim();
+    const r=await callAI({action:'meal', imageBase64:base64, mimeType:f.type, note});
+    pendingAI={calories:r.calories, analysis:r.analysis};
+    g.innerHTML=aiGuessHTML(r.calories, r.analysis)+(r.items&&r.items.length?`<br><span style="opacity:.7">辨識：${r.items.join('、')}</span>`:'');
+  }catch(err){
+    g.innerHTML='<span style="color:var(--clay-d)">AI 分析失敗（'+(err.message||err)+'）。照片仍可儲存。</span>';
+  }
 }
 async function saveMeal(btn){
   if(!me) return;
@@ -435,7 +464,10 @@ async function saveMeal(btn){
       if(up.error) throw up.error;
       photo_url=sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
     }
-    const {error}=await sb.from('meals').upsert({member_id:me.id,log_date:today,meal_type:curMealType,note,photo_url},{onConflict:'member_id,log_date,meal_type'});
+    const prev=todayMeals[curMealType]||{};
+    const ai_calories = pendingAI?pendingAI.calories:(prev.ai_calories??null);
+    const ai_analysis = pendingAI?pendingAI.analysis:(prev.ai_analysis??null);
+    const {error}=await sb.from('meals').upsert({member_id:me.id,log_date:today,meal_type:curMealType,note,photo_url,ai_calories,ai_analysis},{onConflict:'member_id,log_date,meal_type'});
     if(error) throw error;
     toast(curMealType+'已儲存'); await loadToday(); go('s-today');
   }catch(err){ toast('儲存失敗：'+(err.message||err)); }
@@ -515,14 +547,43 @@ async function loadFamily(){
   document.getElementById('famQuote').textContent = total>0.05?('全家本週合計減了 '+total.toFixed(1)+' 公斤，一起加油！'):'大家一起記錄，這裡會出現全家的本週戰報。';
 }
 
-// ===== AI（第一階段：基本小結；Gemini 之後接）=====
+// ===== AI 手記：當日熱量總計 ＋ Gemini 營養師總評（快取於 ai_notes）=====
 function loadAI(){
-  const done=Object.keys(todayMeals).length, pct=Math.round(water/WATER_GOAL*100);
-  const L=[`今天記錄了 <b>${done}/3</b> 餐，喝水達成 <b>${pct}%</b>。`];
-  if(done<3) L.push('還有一餐沒記，記得補上。');
-  if(pct<80) L.push('水分偏少，記得多喝幾杯。');
-  if(done>=3&&pct>=80) L.push('今天記錄很完整，做得很好。');
-  document.getElementById('aiBody').innerHTML=`<div class="bubble"><span class="h">今日小結</span>${L.join(' ')}</div>`;
+  const meals=MEAL_TYPES.map(t=>todayMeals[t]).filter(Boolean);
+  const total=meals.reduce((s,m)=>s+(Number(m.ai_calories)||0),0);
+  const done=meals.length, pct=Math.round(water/WATER_GOAL*100);
+  let rows='';
+  MEAL_TYPES.forEach(t=>{ const m=todayMeals[t]; rows+=`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:15px"><span>${t}</span><span style="color:var(--muted)">${m?(m.ai_calories?m.ai_calories+' 大卡':'已記錄'):'—'}</span></div>`; });
+  document.getElementById('aiBody').innerHTML=
+    `<div class="bubble"><span class="h">今日熱量</span>`+
+    `<div style="font-family:var(--serif);font-size:30px;margin:2px 0 12px">${total} <span style="font-size:15px;color:var(--muted)">大卡</span></div>`+
+    rows+
+    `<div style="margin-top:12px;font-size:13px;color:var(--muted)">已記 ${done}/3 餐・喝水 ${pct}%</div></div>`+
+    `<div id="aiNote" class="bubble"><span class="h">營養師總評</span><span style="opacity:.7">讀取中…</span></div>`;
+  loadDailyNote(false);
+}
+
+async function loadDailyNote(force){
+  const el=document.getElementById('aiNote'); if(!el||!me) return;
+  if(!force){
+    const c=await sb.from('ai_notes').select('content').eq('member_id',me.id).eq('log_date',today).maybeSingle();
+    if(c.data&&c.data.content){ el.innerHTML=noteHTML(c.data.content); return; }
+  }
+  const meals=MEAL_TYPES.map(t=>todayMeals[t]).filter(Boolean);
+  if(!meals.length){ el.innerHTML='<span class="h">營養師總評</span>今天還沒記錄三餐，記一餐後我再幫你看 🙂'; return; }
+  el.innerHTML='<span class="h">營養師總評</span><span style="opacity:.7">AI 撰寫中…</span>';
+  try{
+    const w=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).eq('log_date',today).maybeSingle();
+    let weightKg=w.data?Number(w.data.weight_kg):null, deltaKg=null;
+    if(weightKg!=null){ const p=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).lt('log_date',today).order('log_date',{ascending:false}).limit(1).maybeSingle(); if(p.data) deltaKg=Math.round((weightKg-Number(p.data.weight_kg))*10)/10; }
+    const r=await callAI({action:'daily', meals:meals.map(m=>({type:m.meal_type,calories:m.ai_calories,analysis:m.ai_analysis})), weightKg, deltaKg, waterMl:water, goalText:me.goal_text});
+    await sb.from('ai_notes').upsert({member_id:me.id,log_date:today,content:r.note},{onConflict:'member_id,log_date'});
+    el.innerHTML=noteHTML(r.note);
+  }catch(err){ el.innerHTML='<span class="h">營養師總評</span><span style="color:var(--clay-d)">AI 暫時無法回應（'+(err.message||err)+'），稍後再試。</span>'; }
+}
+function noteHTML(text){
+  const body=text.replace(/【([^】]+)】/g,'<br><span style="font-family:var(--serif);color:var(--sage-d)">$1</span><br>').replace(/^<br>/,'');
+  return '<span class="h">營養師總評</span>'+body+'<div style="margin-top:16px"><button class="btn ghost" style="margin:0;width:auto;padding:9px 18px;font-size:14px" onclick="loadDailyNote(true)">重新產生</button></div>';
 }
 
 boot();
