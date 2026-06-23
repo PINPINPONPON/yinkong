@@ -1,0 +1,8 @@
+# 本機開發設定，不需上傳
+.claude/
+.DS_Store
+
+# 祕密金鑰（Gemini 等）絕不進 repo
+.env
+.env.local
+*.key

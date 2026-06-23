@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F6F2E9">
+<title>飲控大作戰</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --paper:#F6F2E9; --paper2:#EEE8DA; --card:#FFFDF8;
+    --ink:#3B352F; --muted:#A39A89; --faint:#C5BCAB; --line:#E7E0D0;
+    --sage:#6E7C63; --sage-d:#505B45; --sage-l:#E7EADF;
+    --clay:#B27A52; --clay-d:#8A5A38; --clay-l:#F1E6D9;
+    --blue:#84A1A8; --blue-d:#566E73; --blue-l:#E5EDEC;
+    --r:18px;
+    --serif:"Noto Serif TC",serif;
+    --sans:-apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:var(--sans); background:#cfc8b8; color:var(--ink);
+    display:flex; align-items:center; justify-content:center; min-height:100vh;
+    letter-spacing:.01em;
+  }
+  .phone{
+    width:100%; max-width:430px; height:100vh; max-height:932px;
+    background:var(--paper); position:relative; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  @media(min-width:460px){ .phone{ border-radius:38px; box-shadow:0 24px 70px rgba(60,50,40,.28); border:9px solid #20201d; height:92vh; } }
+
+  .screen{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; padding-bottom:96px; }
+  .screen.active{ display:block; }
+  .screen.noNav{ padding-bottom:28px; }
+
+  /* shared */
+  .kicker{ font-size:12px; letter-spacing:.28em; color:var(--muted); text-transform:uppercase; font-weight:500; }
+  h1,h2,h3{ font-family:var(--serif); font-weight:500; }
+  .topbar{ padding:26px 26px 10px; display:flex; align-items:center; gap:14px; }
+  .topbar h1{ font-size:25px; letter-spacing:.04em; }
+  .topbar .sub{ font-size:13px; color:var(--muted); }
+  .back{ font-size:26px; background:none; border:none; color:var(--ink); padding:2px 6px 2px 0; font-family:var(--serif); }
+
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:22px; margin:16px 22px; }
+
+  /* ===== member pick ===== */
+  .hello{ text-align:center; padding:64px 26px 6px; }
+  .hello .mark{ font-family:var(--serif); font-size:15px; letter-spacing:.4em; color:var(--clay); margin-bottom:20px; }
+  .hello h1{ font-size:34px; letter-spacing:.08em; line-height:1.3; }
+  .hello .line{ width:34px; height:1px; background:var(--faint); margin:18px auto; }
+  .hello p{ color:var(--muted); font-size:14px; letter-spacing:.06em; }
+  .members{ display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:26px 22px; }
+  .member{ background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:24px 12px; text-align:center; cursor:pointer; transition:.18s; }
+  .member:active{ transform:scale(.97); background:var(--sage-l); }
+  .avatar{ width:58px;height:58px;border-radius:50%; margin:0 auto 12px; display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-size:24px; color:var(--card); }
+  .member .name{ font-family:var(--serif); font-size:19px; letter-spacing:.06em; }
+  .member .meta{ font-size:12px; color:var(--muted); margin-top:4px; letter-spacing:.04em; }
+
+  /* ===== today ===== */
+  .greet{ padding:26px 26px 6px; }
+  .greet .d{ font-size:12px; letter-spacing:.22em; color:var(--muted); text-transform:uppercase; }
+  .greet h1{ font-size:28px; letter-spacing:.05em; margin-top:8px; }
+
+  .statRow{ display:flex; align-items:flex-end; justify-content:space-between; }
+  .bigfig{ font-family:var(--serif); font-size:40px; font-weight:400; line-height:1; }
+  .bigfig small{ font-size:15px; color:var(--muted); letter-spacing:.05em; }
+  .pill{ font-size:12px; letter-spacing:.05em; padding:6px 12px; border-radius:30px; font-weight:500; }
+  .pill.down{ background:var(--sage-l); color:var(--sage-d); }
+  .pill.up{ background:var(--clay-l); color:var(--clay-d); }
+
+  .label{ font-family:var(--serif); font-size:18px; letter-spacing:.05em; margin:22px 26px 4px; color:var(--ink); }
+  .sublabel{ font-size:12px; letter-spacing:.06em; color:var(--muted); margin-bottom:12px; }
+
+  /* water */
+  .waterBar{ height:8px; border-radius:8px; background:var(--paper2); overflow:hidden; margin-top:16px;}
+  .waterFill{ height:100%; background:var(--blue); border-radius:8px; transition:width .3s; }
+  .waterBtns{ display:flex; gap:12px; margin-top:18px; }
+  .wbtn{ flex:1; border:1px solid var(--line); border-radius:14px; background:transparent; color:var(--blue-d); font-family:var(--serif); font-size:15px; letter-spacing:.04em; padding:13px 4px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; transition:.15s;}
+  .wbtn small{ font-size:11px; font-family:var(--sans); color:var(--muted); letter-spacing:.02em;}
+  .wbtn:active{ background:var(--blue-l); }
+  .wbtn.ghost{ color:var(--muted); }
+
+  /* meals */
+  .meal{ display:flex; align-items:center; gap:16px; background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:16px 18px; margin:13px 22px; cursor:pointer; transition:.15s; }
+  .meal:active{ transform:scale(.99); }
+  .meal .ph{ width:54px;height:54px;border-radius:14px;background:var(--paper2);display:flex;align-items:center;justify-content:center;flex-shrink:0; overflow:hidden;}
+  .meal .ph svg{ width:24px;height:24px; stroke:var(--muted); }
+  .meal .ph img{width:100%;height:100%;object-fit:cover;}
+  .meal.done .ph{ background:var(--sage-l); }
+  .meal.done .ph svg{ stroke:var(--sage-d); }
+  .meal .body{ flex:1; min-width:0; }
+  .meal .t{ font-family:var(--serif); font-size:18px; letter-spacing:.05em; }
+  .meal .s{ font-size:13px; color:var(--muted); margin-top:4px; letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .meal .chev{ color:var(--faint); font-size:15px; letter-spacing:.1em; }
+
+  .btn{ display:block; width:calc(100% - 44px); margin:10px 22px; padding:17px; border:none; border-radius:14px; background:var(--sage); color:#FBFAF4; font-family:var(--serif); font-size:17px; letter-spacing:.1em; cursor:pointer; transition:.15s; }
+  .btn:active{ transform:scale(.99); background:var(--sage-d); }
+  .btn.ghost{ background:transparent; color:var(--sage-d); border:1px solid var(--sage); }
+  .btn.clay{ background:var(--clay); }
+  .btn.clay:active{ background:var(--clay-d); }
+
+  /* weight pad */
+  .bignum{ text-align:center; font-family:var(--serif); font-size:60px; font-weight:300; padding:34px 0 6px; letter-spacing:.02em; }
+  .bignum small{ font-size:22px; color:var(--muted); }
+  .keys{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:20px 26px; }
+  .key{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; font-family:var(--serif); font-size:24px; cursor:pointer; transition:.12s; }
+  .key:active{ background:var(--sage-l); }
+
+  /* meal editor */
+  .photoBox{ margin:16px 22px; height:210px; border-radius:var(--r); background:var(--card); border:1px dashed var(--faint); display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--muted); cursor:pointer; overflow:hidden; }
+  .photoBox img{ width:100%;height:100%;object-fit:cover; }
+  .photoBox svg{ width:34px;height:34px; stroke:var(--faint); }
+  .photoBox .tx{ margin-top:12px; font-size:14px; letter-spacing:.06em; }
+  textarea{ width:calc(100% - 44px); margin:6px 22px; min-height:88px; border:1px solid var(--line); border-radius:14px; padding:16px; font-size:16px; font-family:var(--sans); color:var(--ink); background:var(--card); resize:none; letter-spacing:.02em; }
+  textarea:focus{ outline:none; border-color:var(--sage); }
+  .aiTag{ margin:8px 22px; background:var(--clay-l); color:var(--clay-d); border-radius:14px; padding:14px 16px; font-size:14px; line-height:1.7; letter-spacing:.02em; }
+  .aiTag b{ font-weight:600; }
+
+  /* trend */
+  .stat3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; margin:6px 22px; }
+  .stat{ background:var(--card); padding:18px 8px; text-align:center; }
+  .stat .v{ font-family:var(--serif); font-size:24px; }
+  .stat .v.g{ color:var(--sage-d); }
+  .stat .l{ font-size:11px; letter-spacing:.12em; color:var(--muted); margin-top:6px; text-transform:uppercase;}
+  .chartWrap{ background:var(--card); border:1px solid var(--line); border-radius:var(--r); margin:16px 22px; padding:18px; height:250px; }
+
+  .quote{ font-family:var(--serif); font-size:16px; line-height:1.9; letter-spacing:.04em; color:var(--ink); }
+  .quote .h{ font-size:12px; letter-spacing:.2em; color:var(--clay); text-transform:uppercase; margin-bottom:12px; display:block; }
+
+  /* family */
+  .rankItem{ display:flex; align-items:center; gap:16px; padding:18px 4px; border-bottom:1px solid var(--line); }
+  .rankItem:last-child{ border-bottom:none; }
+  .rankNo{ width:26px; text-align:center; font-family:var(--serif); font-size:17px; color:var(--muted); }
+  .rankItem .av{ width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:16px;color:var(--card);}
+  .rankItem .name{ flex:1; font-family:var(--serif); font-size:17px; letter-spacing:.05em; }
+  .rankItem .score{ font-size:14px; letter-spacing:.04em; color:var(--sage-d); }
+  .rankItem.me .name::after{ content:'·你'; color:var(--clay); font-size:13px; }
+
+  /* AI */
+  .aiHead{ padding:28px 26px 4px; }
+  .aiHead .kk{ font-size:12px; letter-spacing:.28em; color:var(--clay); text-transform:uppercase; }
+  .aiHead h1{ font-size:27px; letter-spacing:.06em; margin-top:10px; }
+  .aiHead p{ font-size:13px; color:var(--muted); margin-top:6px; letter-spacing:.04em; }
+  .bubble{ background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:20px 22px; margin:14px 22px; font-size:15px; line-height:1.9; letter-spacing:.02em; color:var(--ink); }
+  .bubble .h{ font-family:var(--serif); font-size:13px; letter-spacing:.16em; text-transform:uppercase; color:var(--sage-d); margin-bottom:10px; display:block; }
+  .bubble.warn{ background:var(--clay-l); border-color:#E8D7C5; }
+  .bubble.warn .h{ color:var(--clay-d); }
+  .bubble ul{ padding-left:18px; }
+  .bubble li{ margin:6px 0; }
+  .bubble b{ font-weight:600; }
+
+  /* nav */
+  .nav{ position:absolute; bottom:0; left:0; right:0; height:74px; background:var(--card); border-top:1px solid var(--line); display:flex; }
+  .nav button{ flex:1; background:none; border:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; color:var(--muted); font-size:11px; letter-spacing:.1em; cursor:pointer; }
+  .nav button svg{ width:21px;height:21px; stroke:currentColor; }
+  .nav button.on{ color:var(--sage-d); }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- ===== 選人 ===== -->
+  <section class="screen active noNav" id="s-pick">
+    <div class="hello">
+      <div class="mark">飲 控 大 作 戰</div>
+      <h1>今天，<br>也好好吃飯</h1>
+      <div class="line"></div>
+      <p>選擇你是誰，開始今天的紀錄</p>
+    </div>
+    <div class="members" id="memberGrid"></div>
+  </section>
+
+  <!-- ===== 今日 ===== -->
+  <section class="screen" id="s-today">
+    <div class="greet">
+      <div class="d" id="todayDate">JUN 23 · 星期二</div>
+      <h1 id="hiName">早安，蘋</h1>
+    </div>
+
+    <div class="card" onclick="go('s-weigh')">
+      <div class="statRow">
+        <div>
+          <div class="kicker">今日體重</div>
+          <div class="bigfig" style="margin-top:10px;"><span id="todayW">68.4</span><small> kg</small></div>
+        </div>
+        <span class="pill down" id="todayDelta">較昨日 ▼ 0.3</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="statRow">
+        <div>
+          <div class="kicker">今日飲水</div>
+          <div class="bigfig" style="margin-top:10px;"><span id="waterNow">750</span><small> / 1500 cc</small></div>
+        </div>
+        <span class="pill up" id="waterPct">50%</span>
+      </div>
+      <div class="waterBar"><div class="waterFill" id="waterFill" style="width:50%"></div></div>
+      <div class="waterBtns">
+        <button class="wbtn" onclick="addWater(250)">一杯<small>250 cc</small></button>
+        <button class="wbtn" onclick="addWater(500)">大杯<small>500 cc</small></button>
+        <button class="wbtn ghost" onclick="addWater(-250)">退回<small>&nbsp;</small></button>
+      </div>
+    </div>
+
+    <div class="label">今日三餐<div class="sublabel">拍下來，AI 幫你看</div></div>
+    <div class="meals" id="mealList"></div>
+
+    <button class="btn ghost" onclick="go('s-ai')">閱讀今日營養師手記</button>
+  </section>
+
+  <!-- ===== 體重 ===== -->
+  <section class="screen noNav" id="s-weigh">
+    <div class="topbar"><button class="back" onclick="go('s-today')">‹</button><h1>記錄體重</h1></div>
+    <div class="bignum"><span id="wDisplay">68.4</span><small> kg</small></div>
+    <div class="keys">
+      <button class="key" onclick="wKey('7')">7</button>
+      <button class="key" onclick="wKey('8')">8</button>
+      <button class="key" onclick="wKey('9')">9</button>
+      <button class="key" onclick="wKey('4')">4</button>
+      <button class="key" onclick="wKey('5')">5</button>
+      <button class="key" onclick="wKey('6')">6</button>
+      <button class="key" onclick="wKey('1')">1</button>
+      <button class="key" onclick="wKey('2')">2</button>
+      <button class="key" onclick="wKey('3')">3</button>
+      <button class="key" onclick="wKey('.')">.</button>
+      <button class="key" onclick="wKey('0')">0</button>
+      <button class="key" onclick="wKey('del')">⌫</button>
+    </div>
+    <button class="btn" onclick="saveWeight(this)">儲存</button>
+  </section>
+
+  <!-- ===== 餐點 ===== -->
+  <section class="screen noNav" id="s-meal">
+    <div class="topbar"><button class="back" onclick="go('s-today')">‹</button><h1 id="mealTitle">早餐</h1></div>
+    <div class="photoBox" id="photoBox" onclick="document.getElementById('mealFile').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      <div class="tx">輕觸拍照，或選一張照片</div>
+    </div>
+    <input type="file" id="mealFile" accept="image/*" capture="environment" style="display:none" onchange="onPhotoPick(event)">
+    <div class="aiTag hidden" id="aiGuess"></div>
+    <div class="label" style="margin:20px 22px 0;">補充說明<div class="sublabel">想記的話再寫，不寫也行</div></div>
+    <textarea id="mealNote" placeholder="例如：地瓜半條、無糖豆漿一杯…"></textarea>
+    <button class="btn" onclick="saveMeal(this)">儲存這一餐</button>
+  </section>
+
+  <!-- ===== 趨勢 ===== -->
+  <section class="screen" id="s-trend">
+    <div class="topbar"><h1>體重手帳</h1></div>
+    <div class="stat3">
+      <div class="stat"><div class="v g" id="tMonth">—</div><div class="l">本月 kg</div></div>
+      <div class="stat"><div class="v" id="tNow">—</div><div class="l">目前 kg</div></div>
+      <div class="stat"><div class="v" id="tCount">—</div><div class="l">紀錄筆數</div></div>
+    </div>
+    <div class="chartWrap"><canvas id="trendChart"></canvas></div>
+    <div class="card">
+      <p class="quote"><span class="h">趨勢解讀</span><span id="tQuote">記錄越多天，這裡的解讀會越準。先連續記幾天看看吧。</span></p>
+    </div>
+  </section>
+
+  <!-- ===== 家庭 ===== -->
+  <section class="screen" id="s-family">
+    <div class="topbar"><h1>家的進度</h1><span class="sub" style="margin-left:auto">本週減重</span></div>
+    <div class="card" id="rankCard"></div>
+    <div class="card">
+      <p class="quote"><span class="h">本週家庭手記</span><span id="famQuote">大家一起記錄，這裡會出現全家的本週戰報。</span></p>
+    </div>
+  </section>
+
+  <!-- ===== AI ===== -->
+  <section class="screen" id="s-ai">
+    <div class="aiHead">
+      <div class="kk">Nutritionist's note</div>
+      <h1>營養師手記</h1>
+      <p>根據蘋今天的紀錄寫下</p>
+    </div>
+    <div id="aiBody"></div>
+    <div class="bubble warn"><span class="h">即將上線</span>AI 看照片估熱量、寫個人化建議，會在第二階段接上（Gemini）。現在先幫你做基本的當日小結。</div>
+  </section>
+
+  <!-- ===== nav ===== -->
+  <nav class="nav hidden" id="nav">
+    <button data-s="s-today" class="on" onclick="go('s-today')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>今天</button>
+    <button data-s="s-trend" onclick="go('s-trend')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8"/><path d="M3 21h18"/></svg>手帳</button>
+    <button data-s="s-family" onclick="go('s-family')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20c0-3 2.5-5 6-5s6 2 6 5"/><path d="M15 15c2.5.2 4 2 4 5"/></svg>家</button>
+    <button data-s="s-ai" onclick="go('s-ai')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a7 7 0 0 1 7 7c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 7-7z"/><circle cx="12" cy="10" r="2.2"/></svg>手記</button>
+  </nav>
+
+  <div id="toast" style="position:absolute; left:50%; bottom:96px; transform:translateX(-50%) translateY(20px); background:var(--ink); color:var(--paper); font-size:14px; letter-spacing:.05em; padding:11px 20px; border-radius:30px; opacity:0; transition:.25s; pointer-events:none; z-index:50;"></div>
+</div>
+
+<script>
+// ===== 設定（anon key 為公開設計，放這裡安全）=====
+const SUPABASE_URL='https://yhovcuiigwmsccwxcepn.supabase.co';
+const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlob3ZjdWlpZ3dtc2Njd3hjZXBuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxOTI3MjEsImV4cCI6MjA5Nzc2ODcyMX0.ZhcYS8XNX35NsgmU4sIvVVGXWxR_cdJsxIg3dy_KKHs';
+const PHOTO_BUCKET='meal-photos';
+const WATER_GOAL=1500;
+const MEAL_TYPES=['早餐','午餐','晚餐'];
+const sb=supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ===== 狀態 =====
+let members=[], me=null, today=localDate();
+let curMealType=null, pendingPhoto=null, todayMeals={}, water=0, wVal='', chartObj=null;
+
+const ICON_FORK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 12v9M16 3c-1.5 0-2.5 2-2.5 5s1 3.5 2.5 3.5V21"/></svg>';
+const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
+const ICON_CAM='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+
+function localDate(d=new Date()){ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
+function greet(){ const h=new Date().getHours(); return h<11?'早安':h<18?'午安':'晚安'; }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.opacity='1'; t.style.transform='translateX(-50%) translateY(0)'; clearTimeout(t._t); t._t=setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; },2000); }
+
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const navScreens=['s-today','s-trend','s-family','s-ai'], nav=document.getElementById('nav');
+  nav.classList.toggle('hidden', !navScreens.includes(id));
+  nav.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.s===id));
+  document.querySelectorAll('.screen').forEach(s=>s.scrollTop=0);
+  if(id==='s-weigh'){ const cur=document.getElementById('todayW').textContent; wVal=(cur&&cur!=='—')?cur:''; document.getElementById('wDisplay').textContent=wVal||'0'; }
+  if(id==='s-trend') loadTrend();
+  if(id==='s-family') loadFamily();
+  if(id==='s-ai') loadAI();
+}
+
+// ===== 啟動：載入成員 =====
+async function boot(){
+  const now=new Date();
+  const wd=['日','一','二','三','四','五','六'][now.getDay()];
+  const mon=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][now.getMonth()];
+  document.getElementById('todayDate').textContent=mon+' '+now.getDate()+' · 星期'+wd;
+  const grid=document.getElementById('memberGrid');
+  const {data,error}=await sb.from('members').select('*').order('sort_order');
+  if(error){ grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:14px;line-height:1.9">連不上資料庫 😕<br>請確認 SQL 已執行、bucket 已建<br><span style="font-size:12px">'+error.message+'</span></div>'; return; }
+  members=data||[];
+  grid.innerHTML='';
+  members.forEach(m=>{
+    const d=document.createElement('div'); d.className='member';
+    d.innerHTML=`<div class="avatar" style="background:${m.avatar_color}">${m.name[0]}</div><div class="name">${m.name}</div><div class="meta">${m.goal_text||''}</div>`;
+    d.onclick=()=>selectMember(m);
+    grid.appendChild(d);
+  });
+}
+
+async function selectMember(m){
+  me=m;
+  document.getElementById('hiName').textContent=greet()+'，'+m.name;
+  document.querySelector('.aiHead p').textContent='根據'+m.name+'今天的紀錄寫下';
+  await loadToday();
+  go('s-today');
+}
+
+// ===== 今日資料 =====
+async function loadToday(){
+  const [w,wat,ml]=await Promise.all([
+    sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).eq('log_date',today).maybeSingle(),
+    sb.from('water_logs').select('amount_ml').eq('member_id',me.id).eq('log_date',today).maybeSingle(),
+    sb.from('meals').select('*').eq('member_id',me.id).eq('log_date',today)
+  ]);
+  const wt=w.data?Number(w.data.weight_kg):null;
+  document.getElementById('todayW').textContent=wt!=null?wt.toFixed(1):'—';
+  const dEl=document.getElementById('todayDelta');
+  if(wt!=null){
+    const prev=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).lt('log_date',today).order('log_date',{ascending:false}).limit(1).maybeSingle();
+    if(prev.data){ const diff=wt-Number(prev.data.weight_kg); const down=diff<=0; dEl.textContent='較前次 '+(down?'▼ ':'▲ ')+Math.abs(diff).toFixed(1); dEl.className='pill '+(down?'down':'up'); }
+    else { dEl.textContent='第一筆紀錄'; dEl.className='pill down'; }
+  } else { dEl.textContent='尚未記錄'; dEl.className='pill up'; }
+  water=wat.data?wat.data.amount_ml:0; renderWater();
+  todayMeals={}; (ml.data||[]).forEach(r=>todayMeals[r.meal_type]=r); renderMeals();
+}
+
+function renderWater(){
+  const pct=Math.round(water/WATER_GOAL*100);
+  document.getElementById('waterNow').textContent=water;
+  document.getElementById('waterFill').style.width=Math.min(100,pct)+'%';
+  const t=document.getElementById('waterPct'); t.textContent=pct+'%'; t.className='pill '+(pct>=100?'down':'up');
+}
+async function addWater(ml){
+  if(!me) return;
+  water=Math.max(0, Math.min(WATER_GOAL+1000, water+ml)); renderWater();
+  const {error}=await sb.from('water_logs').upsert({member_id:me.id,log_date:today,amount_ml:water},{onConflict:'member_id,log_date'});
+  if(error) toast('儲存失敗');
+}
+
+function renderMeals(){
+  const box=document.getElementById('mealList'); box.innerHTML='';
+  MEAL_TYPES.forEach(type=>{
+    const row=todayMeals[type], done=!!row;
+    const desc=done?(row.ai_analysis||row.note||'已記錄'):'還沒記錄';
+    const thumb=(row&&row.photo_url)?`<img src="${row.photo_url}">`:(done?ICON_CHECK:ICON_FORK);
+    const d=document.createElement('div'); d.className='meal'+(done?' done':'');
+    d.innerHTML=`<div class="ph">${thumb}</div><div class="body"><div class="t">${type}</div><div class="s">${desc}</div></div><div class="chev">${done?'修改':'記錄 ›'}</div>`;
+    d.onclick=()=>openMeal(type); box.appendChild(d);
+  });
+}
+function openMeal(type){
+  curMealType=type; pendingPhoto=null;
+  const row=todayMeals[type];
+  document.getElementById('mealTitle').textContent=type;
+  document.getElementById('mealNote').value=row&&row.note?row.note:'';
+  document.getElementById('mealFile').value='';
+  const pb=document.getElementById('photoBox');
+  pb.innerHTML=(row&&row.photo_url)?`<img src="${row.photo_url}">`:`${ICON_CAM}<div class="tx">輕觸拍照，或選一張照片</div>`;
+  document.getElementById('aiGuess').classList.add('hidden');
+  go('s-meal');
+}
+function onPhotoPick(e){
+  const f=e.target.files[0]; if(!f) return;
+  pendingPhoto=f;
+  document.getElementById('photoBox').innerHTML=`<img src="${URL.createObjectURL(f)}">`;
+}
+async function saveMeal(btn){
+  if(!me) return;
+  const note=document.getElementById('mealNote').value.trim();
+  if(!note && !pendingPhoto && !(todayMeals[curMealType])){ toast('拍張照或寫點字再儲存'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='儲存中…'; }
+  try{
+    let photo_url=todayMeals[curMealType]?todayMeals[curMealType].photo_url:null;
+    if(pendingPhoto){
+      const ext=(pendingPhoto.name.split('.').pop()||'jpg').toLowerCase();
+      const path=`${me.id}/${today}/${curMealType}-${Date.now()}.${ext}`;
+      const up=await sb.storage.from(PHOTO_BUCKET).upload(path,pendingPhoto,{upsert:true,contentType:pendingPhoto.type});
+      if(up.error) throw up.error;
+      photo_url=sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
+    }
+    const {error}=await sb.from('meals').upsert({member_id:me.id,log_date:today,meal_type:curMealType,note,photo_url},{onConflict:'member_id,log_date,meal_type'});
+    if(error) throw error;
+    toast(curMealType+'已儲存'); await loadToday(); go('s-today');
+  }catch(err){ toast('儲存失敗：'+(err.message||err)); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='儲存這一餐'; } }
+}
+
+function wKey(k){
+  if(k==='del') wVal=wVal.slice(0,-1);
+  else if(k==='.'){ if(!wVal.includes('.')&&wVal.length) wVal+='.'; }
+  else { if(wVal.replace('.','').length<4) wVal+=k; }
+  document.getElementById('wDisplay').textContent=wVal||'0';
+}
+async function saveWeight(btn){
+  if(!me) return;
+  const v=parseFloat(wVal);
+  if(!v||v<20||v>250){ toast('請輸入合理的體重'); return; }
+  if(btn) btn.disabled=true;
+  const {error}=await sb.from('weight_logs').upsert({member_id:me.id,log_date:today,weight_kg:v},{onConflict:'member_id,log_date'});
+  if(btn) btn.disabled=false;
+  if(error){ toast('儲存失敗'); return; }
+  toast('體重已儲存'); await loadToday(); go('s-today');
+}
+
+// ===== 趨勢 =====
+async function loadTrend(){
+  if(!me) return;
+  const {data}=await sb.from('weight_logs').select('weight_kg,log_date').eq('member_id',me.id).order('log_date',{ascending:true}).limit(60);
+  const rows=data||[];
+  document.getElementById('tCount').textContent=rows.length;
+  if(rows.length){
+    const now=Number(rows[rows.length-1].weight_kg);
+    document.getElementById('tNow').textContent=now.toFixed(1);
+    const cutoff=localDate(new Date(Date.now()-30*864e5));
+    const mRows=rows.filter(r=>r.log_date>=cutoff);
+    document.getElementById('tMonth').textContent = mRows.length>=2 ? ((now-Number(mRows[0].weight_kg)<=0?'−':'+')+Math.abs(now-Number(mRows[0].weight_kg)).toFixed(1)) : '—';
+    document.getElementById('tQuote').textContent = rows.length<3 ? '記錄越多天，這裡的解讀會越準。先連續記幾天看看吧。' : trendQuote(rows);
+  } else { document.getElementById('tNow').textContent='—'; document.getElementById('tMonth').textContent='—'; }
+  drawChart(rows);
+}
+function trendQuote(rows){
+  const diff=Number(rows[rows.length-1].weight_kg)-Number(rows[0].weight_kg);
+  if(diff<-0.2) return '整體呈下降趨勢，保持得很好，繼續維持這個節奏。';
+  if(diff>0.2) return '最近略有回升，回頭看看三餐與喝水，調整一下就好。';
+  return '體重大致持平，穩定也是一種好狀態。';
+}
+function drawChart(rows){
+  const ctx=document.getElementById('trendChart'); if(!ctx) return;
+  if(chartObj) chartObj.destroy();
+  const labels=rows.map(r=>{const p=r.log_date.split('-');return p[1]+'/'+p[2];});
+  chartObj=new Chart(ctx,{ type:'line',
+    data:{ labels, datasets:[{ data:rows.map(r=>Number(r.weight_kg)),
+      borderColor:'#6E7C63', backgroundColor:'rgba(110,124,99,.10)', fill:true, tension:.4,
+      pointBackgroundColor:'#6E7C63', pointBorderColor:'#FFFDF8', pointBorderWidth:2, pointRadius:4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ y:{ ticks:{color:'#A39A89',font:{size:11}}, grid:{color:'#EEE8DA'} },
+               x:{ grid:{display:false}, ticks:{color:'#A39A89',font:{size:11}} } } }
+  });
+}
+
+// ===== 家庭 =====
+async function loadFamily(){
+  const rc=document.getElementById('rankCard');
+  rc.innerHTML='<div style="text-align:center;color:var(--muted);font-size:14px;padding:8px">載入中…</div>';
+  const cutoff=localDate(new Date(Date.now()-7*864e5));
+  const {data}=await sb.from('weight_logs').select('member_id,weight_kg,log_date').gte('log_date',cutoff).order('log_date',{ascending:true});
+  const byM={}; (data||[]).forEach(r=>{ (byM[r.member_id]=byM[r.member_id]||[]).push(r); });
+  const res=members.map(m=>{ const a=byM[m.id]||[]; return {m, change:a.length>=2?Number(a[a.length-1].weight_kg)-Number(a[0].weight_kg):null}; });
+  res.sort((a,b)=>{ if(a.change==null&&b.change==null) return a.m.sort_order-b.m.sort_order; if(a.change==null) return 1; if(b.change==null) return -1; return a.change-b.change; });
+  rc.innerHTML='';
+  res.forEach((r,i)=>{
+    const sc = r.change==null?'—':(r.change<=-0.05?'−'+Math.abs(r.change).toFixed(1)+' kg':(r.change>=0.05?'+'+r.change.toFixed(1)+' kg':'持平'));
+    const d=document.createElement('div'); d.className='rankItem'+((me&&r.m.id===me.id)?' me':'');
+    d.innerHTML=`<div class="rankNo">${i+1}</div><div class="av" style="background:${r.m.avatar_color}">${r.m.name[0]}</div><div class="name">${r.m.name}</div><div class="score">${sc}</div>`;
+    rc.appendChild(d);
+  });
+  const total=res.reduce((s,r)=>s+(r.change&&r.change<0?-r.change:0),0);
+  document.getElementById('famQuote').textContent = total>0.05?('全家本週合計減了 '+total.toFixed(1)+' 公斤，一起加油！'):'大家一起記錄，這裡會出現全家的本週戰報。';
+}
+
+// ===== AI（第一階段：基本小結；Gemini 之後接）=====
+function loadAI(){
+  const done=Object.keys(todayMeals).length, pct=Math.round(water/WATER_GOAL*100);
+  const L=[`今天記錄了 <b>${done}/3</b> 餐，喝水達成 <b>${pct}%</b>。`];
+  if(done<3) L.push('還有一餐沒記，記得補上。');
+  if(pct<80) L.push('水分偏少，記得多喝幾杯。');
+  if(done>=3&&pct>=80) L.push('今天記錄很完整，做得很好。');
+  document.getElementById('aiBody').innerHTML=`<div class="bubble"><span class="h">今日小結</span>${L.join(' ')}</div>`;
+}
+
+boot();
+</script>
+</body>
+</html>
