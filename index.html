@@ -183,6 +183,10 @@
     <div class="greet">
       <div class="d" id="todayDate">JUN 23 · 星期二</div>
       <h1 id="hiName">早安，蘋</h1>
+      <button onclick="openGoal()" style="margin-top:10px;background:var(--sage-l);border:none;color:var(--sage-d);font-size:13px;letter-spacing:.04em;padding:6px 14px;border-radius:30px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+        <span id="goalChip">目標</span>
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      </button>
     </div>
 
     <div class="card" onclick="go('s-weigh')">
@@ -236,6 +240,14 @@
       <button class="key" onclick="wKey('del')">⌫</button>
     </div>
     <button class="btn" onclick="saveWeight(this)">儲存</button>
+  </section>
+
+  <!-- ===== 編輯目標 ===== -->
+  <section class="screen noNav" id="s-goal">
+    <div class="topbar"><button class="back" onclick="go('s-today')">‹</button><h1>編輯目標</h1></div>
+    <div class="label" style="margin:16px 22px 0;">你的目標<div class="sublabel">例如：目標 60kg、維持體態、增肌減脂</div></div>
+    <textarea id="goalInput" placeholder="輸入你的目標…" style="min-height:60px"></textarea>
+    <button class="btn" onclick="saveGoal(this)">儲存目標</button>
   </section>
 
   <!-- ===== 餐點 ===== -->
@@ -369,9 +381,23 @@ async function boot(){
 async function selectMember(m){
   me=m;
   document.getElementById('hiName').textContent=greet()+'，'+m.name;
+  document.getElementById('goalChip').textContent=m.goal_text||'設定目標';
   document.querySelector('.aiHead p').textContent='根據'+m.name+'今天的紀錄寫下';
   await loadToday();
   go('s-today');
+}
+
+function openGoal(){ if(!me) return; document.getElementById('goalInput').value=me.goal_text||''; go('s-goal'); }
+async function saveGoal(btn){
+  if(!me) return;
+  const v=document.getElementById('goalInput').value.trim();
+  if(btn) btn.disabled=true;
+  const {error}=await sb.from('members').update({goal_text:v}).eq('id',me.id);
+  if(btn) btn.disabled=false;
+  if(error){ toast('儲存失敗：'+error.message); return; }
+  me.goal_text=v;
+  document.getElementById('goalChip').textContent=v||'設定目標';
+  toast('目標已更新'); go('s-today');
 }
 
 // ===== 今日資料 =====
