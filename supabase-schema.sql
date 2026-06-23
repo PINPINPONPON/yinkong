@@ -3,11 +3,15 @@
 
 -- 家庭成員
 create table if not exists members (
-  id          bigint generated always as identity primary key,
-  name        text not null,
-  avatar_color text not null default '#6E7C63',
-  goal_text   text default '',
-  sort_order  int  default 0
+  id                 bigint generated always as identity primary key,
+  name               text not null,
+  avatar_color       text not null default '#6E7C63',
+  goal_text          text default '',
+  sort_order         int  default 0,
+  pin                text,                 -- 選填 4 位數 PIN（之後加）
+  goal_weight        numeric(5,1),         -- 目標體重
+  daily_calorie_goal int,                  -- 每日熱量目標
+  daily_water_goal   int default 1500      -- 每日喝水目標
 );
 
 -- 體重紀錄（每人每天一筆，重複記錄會覆蓋）
