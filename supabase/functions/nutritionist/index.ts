@@ -67,6 +67,15 @@ const MEAL_SCHEMA = {
   required: ["calories", "analysis"],
 };
 
+const EXERCISE_SCHEMA = {
+  type: "object",
+  properties: {
+    caloriesBurned: { type: "integer" },
+    analysis: { type: "string" },
+  },
+  required: ["caloriesBurned", "analysis"],
+};
+
 async function handleMeal(b: any) {
   const note = (b.note ?? "").trim();
   const prompt =
@@ -99,17 +108,41 @@ async function handleDaily(b: any) {
     ? meals.map((m: any) => `・${m.type}：${m.calories ? m.calories + " 大卡，" : ""}${m.analysis || "（無分析）"}`).join("\n")
     : "（今天還沒記錄三餐）";
   const total = meals.reduce((s: number, m: any) => s + (Number(m.calories) || 0), 0);
+  const exDesc = (b.exerciseDescription ?? "").trim();
+  const exBurned = Number(b.exerciseBurned) || 0;
+  const exLine = exDesc
+    ? `今日運動：${exDesc}（約消耗 ${exBurned} 大卡）\n`
+    : "今日運動：未記錄\n";
   const prompt =
     "你是親切、專業的家庭營養師。根據以下某位家人今天的紀錄，用繁體中文寫建議。\n" +
     `目標：${b.goalText || "維持健康"}\n` +
     `今日體重：${b.weightKg ? b.weightKg + " kg" : "未記錄"}` +
     `${b.deltaKg != null ? `（較前次 ${b.deltaKg > 0 ? "+" : ""}${b.deltaKg} kg）` : ""}\n` +
     `今日飲水：${b.waterMl ?? 0} cc\n` +
+    exLine +
     `今日三餐（合計約 ${total} 大卡）：\n${lines}\n\n` +
     "請輸出三段，每段開頭用【今日總評】【小提醒】【運動建議】標示，" +
-    "語氣溫暖、具體、不說教，每段 2～3 句即可。不要使用 markdown 符號。";
+    "可對照「攝取與消耗」給建議。語氣溫暖、具體、不說教，每段 2～3 句即可。不要使用 markdown 符號。";
   const text = await callGemini([{ text: prompt }], { json: false });
   return json({ note: text.trim(), totalCalories: total });
+}
+
+async function handleExercise(b: any) {
+  const desc = (b.description ?? "").trim();
+  if (!desc) return json({ error: "沒有運動描述" }, 400);
+  const prompt =
+    "你是專業運動教練。根據以下運動內容估計「消耗的總熱量」（大卡，整數），" +
+    "並用繁體中文寫一句 30 字內的簡短分析或鼓勵。" +
+    `運動內容：「${desc}」。` +
+    (b.weightKg ? `這位使用者體重約 ${b.weightKg} 公斤，請據此估算。` : "") +
+    "若內容無法判斷，caloriesBurned 給 0、analysis 說明原因。";
+  const text = await callGemini([{ text: prompt }], { json: true, schema: EXERCISE_SCHEMA });
+  let p: any = {};
+  try { p = JSON.parse(text); } catch { p = { caloriesBurned: 0, analysis: text.slice(0, 120) }; }
+  return json({
+    caloriesBurned: Math.max(0, Math.round(Number(p.caloriesBurned) || 0)),
+    analysis: String(p.analysis || ""),
+  });
 }
 
 Deno.serve(async (req) => {
@@ -119,6 +152,7 @@ Deno.serve(async (req) => {
     const b = await req.json();
     if (b.action === "meal") return await handleMeal(b);
     if (b.action === "daily") return await handleDaily(b);
+    if (b.action === "exercise") return await handleExercise(b);
     return json({ error: "未知的 action" }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);

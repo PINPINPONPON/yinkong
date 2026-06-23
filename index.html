@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#F6F2E9">
 <title>飲控大作戰</title>
@@ -30,13 +30,13 @@
     letter-spacing:.01em;
   }
   .phone{
-    width:100%; max-width:430px; height:100vh; max-height:932px;
+    width:100%; max-width:430px; height:100vh; height:100dvh; max-height:932px;
     background:var(--paper); position:relative; overflow:hidden;
     display:flex; flex-direction:column;
   }
   @media(min-width:460px){ .phone{ border-radius:38px; box-shadow:0 24px 70px rgba(60,50,40,.28); border:9px solid #20201d; height:92vh; } }
 
-  .screen{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; padding-bottom:96px; }
+  .screen{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; padding-bottom:calc(96px + env(safe-area-inset-bottom,0px)); }
   .screen.active{ display:block; }
   .screen.noNav{ padding-bottom:28px; }
 
@@ -157,9 +157,9 @@
   .bubble b{ font-weight:600; }
 
   /* nav */
-  .nav{ position:absolute; bottom:0; left:0; right:0; height:74px; background:var(--card); border-top:1px solid var(--line); display:flex; }
-  .nav button{ flex:1; background:none; border:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; color:var(--muted); font-size:11px; letter-spacing:.1em; cursor:pointer; }
-  .nav button svg{ width:21px;height:21px; stroke:currentColor; }
+  .nav{ position:absolute; bottom:0; left:0; right:0; background:var(--card); border-top:1px solid var(--line); display:flex; padding-bottom:env(safe-area-inset-bottom,0px); box-shadow:0 -2px 12px rgba(60,50,40,.04); }
+  .nav button{ flex:1; background:none; border:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:13px 0 12px; color:var(--muted); font-size:11px; letter-spacing:.1em; cursor:pointer; }
+  .nav button svg{ width:23px;height:23px; stroke:currentColor; }
   .nav button.on{ color:var(--sage-d); }
   .hidden{ display:none !important; }
 </style>
@@ -181,8 +181,14 @@
   <!-- ===== 今日 ===== -->
   <section class="screen" id="s-today">
     <div class="greet">
-      <div class="d" id="todayDate">JUN 23 · 星期二</div>
-      <h1 id="hiName">早安，蘋</h1>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="d" id="todayDate">JUN 23 · 星期二</div>
+        <button onclick="go('s-pick')" style="background:var(--card);border:1px solid var(--line);color:var(--sage-d);font-size:13px;letter-spacing:.04em;padding:8px 14px;border-radius:30px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4"/><path d="M20 7H8a4 4 0 0 0-4 4v0"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h12a4 4 0 0 0 4-4v0"/></svg>
+          換人
+        </button>
+      </div>
+      <h1 id="hiName" style="margin-top:8px;">早安，蘋</h1>
       <button onclick="openGoal()" style="margin-top:10px;background:var(--sage-l);border:none;color:var(--sage-d);font-size:13px;letter-spacing:.04em;padding:6px 14px;border-radius:30px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
         <span id="goalChip">目標</span>
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
@@ -213,6 +219,17 @@
         <button class="wbtn" onclick="addWater(500)">大杯<small>500 cc</small></button>
         <button class="wbtn ghost" onclick="addWater(-250)">退回<small>&nbsp;</small></button>
       </div>
+    </div>
+
+    <div class="card" onclick="openExercise()">
+      <div class="statRow">
+        <div>
+          <div class="kicker">今日運動</div>
+          <div class="bigfig" style="margin-top:10px;"><span id="exBurned">—</span><small> 大卡消耗</small></div>
+        </div>
+        <span class="pill down" id="exPill">記錄 ›</span>
+      </div>
+      <div id="exDesc" style="margin-top:12px;font-size:14px;color:var(--muted);letter-spacing:.02em;"></div>
     </div>
 
     <div class="label">今日三餐<div class="sublabel">拍下來，AI 幫你看</div></div>
@@ -248,6 +265,15 @@
     <div class="label" style="margin:16px 22px 0;">你的目標<div class="sublabel">例如：目標 60kg、維持體態、增肌減脂</div></div>
     <textarea id="goalInput" placeholder="輸入你的目標…" style="min-height:60px"></textarea>
     <button class="btn" onclick="saveGoal(this)">儲存目標</button>
+  </section>
+
+  <!-- ===== 編輯運動 ===== -->
+  <section class="screen noNav" id="s-exercise">
+    <div class="topbar"><button class="back" onclick="go('s-today')">‹</button><h1>今日運動</h1></div>
+    <div class="label" style="margin:16px 22px 0;">做了什麼運動？<div class="sublabel">例如：快走 30 分鐘、深蹲 50 下、游泳 1 小時</div></div>
+    <textarea id="exInput" placeholder="輸入今天的運動…"></textarea>
+    <div class="aiTag hidden" id="exGuess"></div>
+    <button class="btn" onclick="saveExercise(this)">儲存（AI 幫你估消耗）</button>
   </section>
 
   <!-- ===== 餐點 ===== -->
@@ -336,7 +362,7 @@ function fileToBase64(file){ return new Promise((resolve,reject)=>{ const r=new 
 
 // ===== 狀態 =====
 let members=[], me=null, today=localDate();
-let curMealType=null, pendingPhoto=null, pendingAI=null, todayMeals={}, water=0, wVal='', chartObj=null;
+let curMealType=null, pendingPhoto=null, pendingAI=null, todayMeals={}, water=0, wVal='', chartObj=null, todayExercise=null;
 
 const ICON_FORK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 12v9M16 3c-1.5 0-2.5 2-2.5 5s1 3.5 2.5 3.5V21"/></svg>';
 const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
@@ -402,11 +428,13 @@ async function saveGoal(btn){
 
 // ===== 今日資料 =====
 async function loadToday(){
-  const [w,wat,ml]=await Promise.all([
+  const [w,wat,ml,ex]=await Promise.all([
     sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).eq('log_date',today).maybeSingle(),
     sb.from('water_logs').select('amount_ml').eq('member_id',me.id).eq('log_date',today).maybeSingle(),
-    sb.from('meals').select('*').eq('member_id',me.id).eq('log_date',today)
+    sb.from('meals').select('*').eq('member_id',me.id).eq('log_date',today),
+    sb.from('exercise_logs').select('*').eq('member_id',me.id).eq('log_date',today).maybeSingle()
   ]);
+  todayExercise = ex.error ? null : ex.data; renderExercise();
   const wt=w.data?Number(w.data.weight_kg):null;
   document.getElementById('todayW').textContent=wt!=null?wt.toFixed(1):'—';
   const dEl=document.getElementById('todayDelta');
@@ -430,6 +458,43 @@ async function addWater(ml){
   water=Math.max(0, Math.min(WATER_GOAL+1000, water+ml)); renderWater();
   const {error}=await sb.from('water_logs').upsert({member_id:me.id,log_date:today,amount_ml:water},{onConflict:'member_id,log_date'});
   if(error) toast('儲存失敗');
+}
+
+function renderExercise(){
+  const burnEl=document.getElementById('exBurned'), pill=document.getElementById('exPill'), desc=document.getElementById('exDesc');
+  if(todayExercise){
+    burnEl.textContent=todayExercise.ai_calories_burned||0;
+    pill.textContent='修改'; pill.className='pill down';
+    desc.textContent=todayExercise.description||'';
+  } else {
+    burnEl.textContent='—'; pill.textContent='記錄 ›'; pill.className='pill down'; desc.textContent='';
+  }
+}
+function openExercise(){
+  if(!me) return;
+  document.getElementById('exInput').value=todayExercise?todayExercise.description:'';
+  const g=document.getElementById('exGuess');
+  if(todayExercise&&(todayExercise.ai_calories_burned||todayExercise.ai_analysis)){
+    g.innerHTML=`約消耗 <b>${todayExercise.ai_calories_burned||0} 大卡</b>。${todayExercise.ai_analysis||''}`; g.classList.remove('hidden');
+  } else g.classList.add('hidden');
+  go('s-exercise');
+}
+async function saveExercise(btn){
+  if(!me) return;
+  const desc=document.getElementById('exInput').value.trim();
+  if(!desc){ toast('先寫一下做了什麼運動'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='AI 估算中…'; }
+  const g=document.getElementById('exGuess');
+  try{
+    const w=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).eq('log_date',today).maybeSingle();
+    const weightKg=w.data?Number(w.data.weight_kg):null;
+    const r=await callAI({action:'exercise', description:desc, weightKg});
+    const {error}=await sb.from('exercise_logs').upsert({member_id:me.id,log_date:today,description:desc,ai_calories_burned:r.caloriesBurned,ai_analysis:r.analysis},{onConflict:'member_id,log_date'});
+    if(error) throw error;
+    g.innerHTML=`約消耗 <b>${r.caloriesBurned} 大卡</b>。${r.analysis||''}`; g.classList.remove('hidden');
+    toast('運動已儲存'); await loadToday(); go('s-today');
+  }catch(err){ toast('儲存失敗：'+(err.message||err)); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='儲存（AI 幫你估消耗）'; } }
 }
 
 function renderMeals(){
@@ -592,18 +657,24 @@ function loadAI(){
 
 async function loadDailyNote(force){
   const el=document.getElementById('aiNote'); if(!el||!me) return;
-  if(!force){
-    const c=await sb.from('ai_notes').select('content').eq('member_id',me.id).eq('log_date',today).maybeSingle();
-    if(c.data&&c.data.content){ el.innerHTML=noteHTML(c.data.content); return; }
-  }
   const meals=MEAL_TYPES.map(t=>todayMeals[t]).filter(Boolean);
-  if(!meals.length){ el.innerHTML='<span class="h">營養師總評</span>今天還沒記錄三餐，記一餐後我再幫你看 🙂'; return; }
+  // 先看快取（不花額度）
+  const c=await sb.from('ai_notes').select('content').eq('member_id',me.id).eq('log_date',today).maybeSingle();
+  if(!force){
+    if(c.data&&c.data.content){ el.innerHTML=noteHTML(c.data.content); return; }
+    if(!meals.length){ el.innerHTML='<span class="h">營養師總評</span>今天還沒記錄三餐，記一餐後再請 AI 看看 🙂'; return; }
+    // 沒快取也不強制 → 顯示按鈕，按了才呼叫 AI（省額度）
+    el.innerHTML='<span class="h">營養師總評</span><div style="margin-bottom:14px;color:var(--muted)">想看 AI 根據今天的三餐、運動、體重給的建議嗎？</div><button class="btn" style="margin:0;width:auto;padding:12px 22px" onclick="loadDailyNote(true)">請 AI 撰寫今日建議</button>';
+    return;
+  }
+  if(!meals.length){ el.innerHTML='<span class="h">營養師總評</span>今天還沒記錄三餐，記一餐後再請 AI 看看 🙂'; return; }
   el.innerHTML='<span class="h">營養師總評</span><span style="opacity:.7">AI 撰寫中…</span>';
   try{
     const w=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).eq('log_date',today).maybeSingle();
     let weightKg=w.data?Number(w.data.weight_kg):null, deltaKg=null;
     if(weightKg!=null){ const p=await sb.from('weight_logs').select('weight_kg').eq('member_id',me.id).lt('log_date',today).order('log_date',{ascending:false}).limit(1).maybeSingle(); if(p.data) deltaKg=Math.round((weightKg-Number(p.data.weight_kg))*10)/10; }
-    const r=await callAI({action:'daily', meals:meals.map(m=>({type:m.meal_type,calories:m.ai_calories,analysis:m.ai_analysis})), weightKg, deltaKg, waterMl:water, goalText:me.goal_text});
+    const r=await callAI({action:'daily', meals:meals.map(m=>({type:m.meal_type,calories:m.ai_calories,analysis:m.ai_analysis})), weightKg, deltaKg, waterMl:water, goalText:me.goal_text,
+      exerciseDescription: todayExercise?todayExercise.description:'', exerciseBurned: todayExercise?todayExercise.ai_calories_burned:0});
     await sb.from('ai_notes').upsert({member_id:me.id,log_date:today,content:r.note},{onConflict:'member_id,log_date'});
     el.innerHTML=noteHTML(r.note);
   }catch(err){ el.innerHTML='<span class="h">營養師總評</span><span style="color:var(--clay-d)">AI 暫時無法回應（'+(err.message||err)+'），稍後再試。</span>'; }
