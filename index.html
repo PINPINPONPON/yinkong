@@ -170,13 +170,13 @@
 
   /* ---- 動態：轉場、浮現、回饋（尊重 prefers-reduced-motion）---- */
   @media (prefers-reduced-motion: no-preference){
-    .screen.active{ animation: fadeIn .26s ease both; }
+    .screen.active{ animation: fadeIn .26s ease backwards; }
     @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
     .screen.active .greet, .screen.active .topbar, .screen.active .aiHead,
     .screen.active .card, .screen.active .bubble, .screen.active .label,
     .screen.active .stat3, .screen.active .chartWrap,
     .screen.active .member, .screen.active .meal, .screen.active .rankItem{
-      animation: riseIn .5s cubic-bezier(.22,.61,.36,1) both;
+      animation: riseIn .5s cubic-bezier(.22,.61,.36,1) backwards;
     }
     @keyframes riseIn{ from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none} }
     .members .member:nth-child(1){animation-delay:.04s} .members .member:nth-child(2){animation-delay:.09s}
@@ -189,9 +189,9 @@
     #rankCard .rankItem:nth-child(5){animation-delay:.23s} #rankCard .rankItem:nth-child(6){animation-delay:.28s}
     #rankCard .rankItem:nth-child(7){animation-delay:.33s}
   }
-  /* 按壓手感 */
-  .card, .meal, .member, .rankItem, .nav button, .wbtn, .key{ transition: transform .12s ease; }
-  .card:active, .meal:active, .member:active, .nav button:active, .key:active{ transform: scale(.975); }
+  /* 按壓手感：手指按下立刻縮放（用 JS .pressing，不靠不可靠的 :active） */
+  button, .card, .meal, .member, .rankItem{ transition: transform .09s ease, opacity .09s ease; }
+  .pressing{ transform: scale(.95) !important; opacity:.9 !important; }
   /* AI 思考中的呼吸點 */
   .thinking{ display:inline-flex; gap:6px; align-items:center; vertical-align:middle; }
   .thinking i{ width:7px; height:7px; border-radius:50%; background:var(--sage); display:inline-block; animation: blink 1.2s infinite both; }
@@ -427,7 +427,6 @@ function animateNum(el, to, dec){
 }
 
 function go(id){
-  haptic(6);
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   const navScreens=['s-today','s-trend','s-family','s-ai'], nav=document.getElementById('nav');
@@ -744,6 +743,14 @@ function noteHTML(text){
   const body=text.replace(/【([^】]+)】/g,'<br><span style="font-family:var(--serif);color:var(--sage-d)">$1</span><br>').replace(/^<br>/,'');
   return '<span class="h">營養師總評</span>'+body+'<div style="margin-top:16px"><button class="btn ghost" style="margin:0;width:auto;padding:9px 18px;font-size:14px" onclick="loadDailyNote(true)">重新產生</button></div>';
 }
+
+// 全域「按下即回饋」：手指一觸就縮放＋輕震，放開復原（跨 iOS/Android 最可靠）
+const PRESS_SEL='button, .card, .meal, .member, .rankItem';
+function clearPressing(){ document.querySelectorAll('.pressing').forEach(el=>el.classList.remove('pressing')); }
+document.addEventListener('pointerdown', (e)=>{ const el=e.target.closest(PRESS_SEL); if(!el) return; el.classList.add('pressing'); haptic(7); }, {passive:true});
+document.addEventListener('pointerup', clearPressing, {passive:true});
+document.addEventListener('pointercancel', clearPressing, {passive:true});
+window.addEventListener('blur', clearPressing);
 
 boot();
 </script>
