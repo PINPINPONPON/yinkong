@@ -349,6 +349,12 @@
     <input id="setWaterGoal" type="number" inputmode="numeric" placeholder="例如 1500" style="width:calc(100% - 44px);margin:6px 22px;height:48px;border:1px solid var(--line);border-radius:14px;padding:0 16px;font-size:16px;font-family:var(--sans);color:var(--ink);background:var(--card);box-sizing:border-box;">
     <div class="label" style="margin:16px 22px 0;">一句話目標<div class="sublabel">例如：維持體態、增肌減脂</div></div>
     <textarea id="goalInput" placeholder="輸入你的目標…" style="min-height:54px"></textarea>
+    <div class="label" style="margin:16px 22px 0;">每日提醒<div class="sublabel">吱吱～到時間敲你記錄（需允許通知；iPhone 要先加到主畫面）</div></div>
+    <div style="display:flex;gap:10px;margin:6px 22px;">
+      <button id="remindBtn" class="btn" style="margin:0;flex:1" onclick="enableReminders(this)">開啟提醒</button>
+      <button class="btn ghost" style="margin:0;width:auto;padding:0 18px" onclick="testReminder()">傳測試</button>
+    </div>
+
     <div class="label" style="margin:16px 22px 0;">登入 PIN（選填，4 位數）<div class="sublabel">設定後，選你時要輸入；清空＝不用 PIN</div></div>
     <input id="setPin" type="number" inputmode="numeric" placeholder="例如 1234" style="width:calc(100% - 44px);margin:6px 22px;height:48px;border:1px solid var(--line);border-radius:14px;padding:0 16px;font-size:16px;font-family:var(--sans);color:var(--ink);background:var(--card);box-sizing:border-box;">
     <button class="btn" onclick="saveGoal(this)">儲存設定</button>
@@ -448,6 +454,9 @@ const PHOTO_BUCKET='meal-photos';
 const WATER_GOAL=1500;
 const MEAL_TYPES=['早餐','午餐','晚餐'];
 const FUNCTIONS_URL=SUPABASE_URL+'/functions/v1/nutritionist';
+const NOTIFY_URL=SUPABASE_URL+'/functions/v1/notify';
+const VAPID_PUBLIC='BLSetFoWnXgeM2eacS_gRjkdibu4GU_GxiTOlDTSy6Hr7gGiIzqcFEJ8EJoikz-tohD2Od1d5AD3lNgkPRSCH7I';
+function urlB64ToU8(s){ const pad='='.repeat((4-s.length%4)%4); const b=(s+pad).replace(/-/g,'+').replace(/_/g,'/'); const raw=atob(b); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
 const sb=supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // 呼叫後台 AI 函式（Gemini 金鑰藏在後台，這裡只帶公開的 anon key）
@@ -603,6 +612,35 @@ function calcBMR(m, weightKg){
 
 let setSexVal=null;
 function setSex(v){ setSexVal=v; ['M','F'].forEach(k=>{ const b=document.getElementById('sex'+k); const on=k===v; b.style.background=on?'var(--sage)':'transparent'; b.style.color=on?'#FBFAF4':'var(--sage-d)'; b.style.borderColor=on?'var(--sage)':'var(--line)'; }); }
+
+// ---- 推播提醒 ----
+async function refreshRemindBtn(){
+  const b=document.getElementById('remindBtn'); if(!b) return;
+  try{ const reg=await navigator.serviceWorker.getRegistration(); const sub=reg&&await reg.pushManager.getSubscription(); b.textContent=(sub&&Notification.permission==='granted')?'提醒已開啟 ✓':'開啟提醒'; }
+  catch(e){ b.textContent='開啟提醒'; }
+}
+async function enableReminders(btn){
+  if(!me) return;
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)){ toast('這支裝置不支援推播'); return; }
+  if(btn) btn.disabled=true;
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ toast('要允許通知才能提醒喔'); return; }
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:urlB64ToU8(VAPID_PUBLIC)});
+    const j=sub.toJSON();
+    const {error}=await sb.from('push_subscriptions').upsert({member_id:me.id, endpoint:j.endpoint, p256dh:j.keys.p256dh, auth:j.keys.auth},{onConflict:'endpoint'});
+    if(error) throw error;
+    haptic(12); toast('提醒已開啟 🔔'); refreshRemindBtn();
+  }catch(e){ toast('開啟失敗：'+(e.message||e)); }
+  finally{ if(btn) btn.disabled=false; }
+}
+async function testReminder(){
+  if(!me) return;
+  try{ const r=await fetch(NOTIFY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selfTest:true, memberId:me.id, type:'test'})}); const d=await r.json(); toast(d.sent?'已送出，看看通知 🔔':'你還沒開啟提醒'); }
+  catch(e){ toast('測試失敗'); }
+}
 function openGoal(){
   if(!me) return;
   document.getElementById('goalInput').value=me.goal_text||'';
@@ -615,6 +653,7 @@ function openGoal(){
   setSexVal=me.sex||null; setSex(setSexVal);
   const b=calcBMR(me, bmrWeight);
   document.getElementById('bmrHint').textContent = b? ('你的基礎代謝 ≈ '+b+' 大卡／天') : '填齊性別、身高、出生年即可算基礎代謝';
+  refreshRemindBtn();
   go('s-goal');
 }
 async function saveGoal(btn){

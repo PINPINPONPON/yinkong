@@ -1,5 +1,21 @@
-// 飲控大作戰 Service Worker — 離線可用＋秒開
-const CACHE = 'yk-v2';
+// 飲控大作戰 Service Worker — 離線可用＋秒開＋推播
+const CACHE = 'yk-v3';
+
+self.addEventListener('push', (e) => {
+  let d = { title: '飲控大作戰', body: '該記錄囉～' };
+  try { d = e.data.json(); } catch (_) { if (e.data) d.body = e.data.text(); }
+  e.waitUntil(self.registration.showNotification(d.title || '飲控大作戰', {
+    body: d.body || '', icon: './icon-512.png', badge: './icon-512.png', vibrate: [12, 40, 20],
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) { if ('focus' in c) return c.focus(); }
+    if (clients.openWindow) return clients.openWindow('./');
+  })());
+});
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

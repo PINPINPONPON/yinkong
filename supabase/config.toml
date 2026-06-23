@@ -2,3 +2,6 @@ project_id = "yinkong"
 
 [functions.nutritionist]
 verify_jwt = true
+
+[functions.notify]
+verify_jwt = false
