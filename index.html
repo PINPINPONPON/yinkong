@@ -383,7 +383,7 @@
     </button>
     <div class="label" style="margin:20px 22px 0;">熱量 (大卡)<div class="sublabel">AI 估的，覺得不準可以自己改</div></div>
     <input id="mealCal" type="number" inputmode="numeric" placeholder="例如 550" style="width:calc(100% - 44px);margin:6px 22px;height:48px;border:1px solid var(--line);border-radius:14px;padding:0 16px;font-size:16px;font-family:var(--sans);color:var(--ink);background:var(--card);box-sizing:border-box;">
-    <div class="label" style="margin:16px 22px 0;">補充說明<div class="sublabel">想記的話再寫，不寫也行</div></div>
+    <div class="label" style="margin:16px 22px 0;">補充說明<div class="sublabel">寫了 AI 會一起算進熱量（例如：地瓜半條、無糖豆漿一杯）</div></div>
     <textarea id="mealNote" placeholder="例如：地瓜半條、無糖豆漿一杯…"></textarea>
     <button class="btn" onclick="saveMeal(this)">儲存這一餐</button>
     <button id="delMealBtn" class="hidden" onclick="deleteMeal()" style="display:block;width:auto;margin:14px auto 0;background:none;border:none;color:var(--clay-d);font-size:14px;cursor:pointer;">刪除這一餐</button>
@@ -493,7 +493,7 @@ function compressImage(file, maxDim=1280, quality=0.8){
 // ===== 狀態 =====
 const REAL_TODAY=localDate();
 let members=[], me=null, today=REAL_TODAY;
-let curMealType=null, pendingAI=null, mealPhotos=[], todayMeals={}, water=0, wVal='', chartObj=null, weekChartObj=null, todayExercise=null, bmrWeight=null;
+let curMealType=null, pendingAI=null, mealPhotos=[], analyzedNote='', todayMeals={}, water=0, wVal='', chartObj=null, weekChartObj=null, todayExercise=null, bmrWeight=null;
 
 const ICON_FORK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 12v9M16 3c-1.5 0-2.5 2-2.5 5s1 3.5 2.5 3.5V21"/></svg>';
 const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
@@ -782,6 +782,7 @@ function renderMeals(){
 function openMeal(type){
   curMealType=type; pendingAI=null;
   const row=todayMeals[type];
+  analyzedNote = row&&row.note ? row.note : '';
   document.getElementById('mealTitle').textContent=type;
   document.getElementById('mealNote').value=row&&row.note?row.note:'';
   document.getElementById('mealCal').value=row&&row.ai_calories!=null?row.ai_calories:'';
@@ -825,32 +826,37 @@ function recalcMealAI(){
   if(mealPhotos.some(p=>p.pending)){ g.innerHTML='<span style="opacity:.6">AI 分析中 </span>'+THINK; g.classList.remove('hidden'); }
   else if(withAI.length){ document.getElementById('mealCal').value=sum; g.innerHTML=aiGuessHTML(sum, analysis); g.classList.remove('hidden'); }
 }
+// 核心：用目前的照片＋文字跑 AI（文字一律一起送進去算）
+async function runMealAI(){
+  const note=document.getElementById('mealNote').value.trim();
+  if(!mealPhotos.length && !note) return;
+  if(mealPhotos.length){
+    mealPhotos.forEach(p=>p.pending=true); renderPhotoStrip(); recalcMealAI();
+    for(const p of mealPhotos){
+      try{
+        let base64;
+        if(p.blob){ base64=await fileToBase64(p.blob); }
+        else if(p.url){ const resp=await fetch(p.url); base64=await fileToBase64(await resp.blob()); }
+        if(base64){ const r=await callAI({action:'meal', imageBase64:base64, mimeType:'image/jpeg', note}); p.cal=r.calories; p.analysis=r.analysis; }
+      }catch(e){ /* 保留原值 */ }
+      finally{ p.pending=false; }
+    }
+    renderPhotoStrip(); recalcMealAI();
+  } else {
+    const g=document.getElementById('aiGuess'); g.innerHTML='<span style="opacity:.6">AI 分析中 </span>'+THINK; g.classList.remove('hidden');
+    const r=await callAI({action:'meal', note});
+    pendingAI={calories:r.calories, analysis:r.analysis};
+    document.getElementById('mealCal').value=r.calories;
+    g.innerHTML=aiGuessHTML(r.calories, r.analysis);
+  }
+  analyzedNote=note;
+}
 async function reanalyzeMeal(btn){
   const note=document.getElementById('mealNote').value.trim();
   if(!mealPhotos.length && !note){ toast('先加照片或寫點字再辨識'); return; }
   if(btn){ btn.disabled=true; btn.textContent='重新辨識中…'; }
-  try{
-    if(mealPhotos.length){
-      mealPhotos.forEach(p=>p.pending=true); renderPhotoStrip(); recalcMealAI();
-      for(const p of mealPhotos){
-        try{
-          let base64;
-          if(p.blob){ base64=await fileToBase64(p.blob); }
-          else if(p.url){ const resp=await fetch(p.url); base64=await fileToBase64(await resp.blob()); }
-          if(base64){ const r=await callAI({action:'meal', imageBase64:base64, mimeType:'image/jpeg', note}); p.cal=r.calories; p.analysis=r.analysis; }
-        }catch(e){ /* 保留原值 */ }
-        finally{ p.pending=false; }
-      }
-      renderPhotoStrip(); recalcMealAI();
-    } else {
-      const g=document.getElementById('aiGuess'); g.innerHTML='<span style="opacity:.6">AI 分析中 </span>'+THINK; g.classList.remove('hidden');
-      const r=await callAI({action:'meal', note});
-      pendingAI={calories:r.calories, analysis:r.analysis};
-      document.getElementById('mealCal').value=r.calories;
-      g.innerHTML=aiGuessHTML(r.calories, r.analysis);
-    }
-    haptic(8); toast('已重新辨識');
-  }catch(err){ toast('辨識失敗：'+(err.message||err)); }
+  try{ await runMealAI(); haptic(8); toast('已重新辨識'); }
+  catch(err){ toast('辨識失敗：'+(err.message||err)); }
   finally{ if(btn){ btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg> AI 重新辨識'; } }
 }
 async function onPhotoPick(e){
@@ -869,6 +875,7 @@ async function onPhotoPick(e){
       finally{ item.pending=false; renderPhotoStrip(); recalcMealAI(); }
     })();
   }
+  analyzedNote=document.getElementById('mealNote').value.trim();
   document.getElementById('mealFile').value='';
 }
 async function saveMeal(btn){
@@ -877,6 +884,14 @@ async function saveMeal(btn){
   if(!note && mealPhotos.length===0 && !document.getElementById('mealCal').value.trim() && !(todayMeals[curMealType])){ toast('拍張照、寫點字或填熱量再儲存'); return; }
   if(btn){ btn.disabled=true; btn.textContent='儲存中…'; }
   try{
+    // 文字一起算：沒手動填熱量，且(文字有改 或 還沒算過) → 先讓 AI 連同文字分析
+    const typedCalPre=parseInt(document.getElementById('mealCal').value,10);
+    const prevRow=todayMeals[curMealType]||{};
+    const everAnalyzed = pendingAI || prevRow.ai_calories!=null;
+    if(!isFinite(typedCalPre) && (mealPhotos.length||note) && (note!==analyzedNote || !everAnalyzed)){
+      if(btn) btn.textContent='AI 分析中…';
+      await runMealAI();
+    }
     const slug={'早餐':'breakfast','午餐':'lunch','晚餐':'dinner'}[curMealType]||'meal';
     const urls=[];
     for(let i=0;i<mealPhotos.length;i++){
